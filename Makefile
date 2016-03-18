@@ -63,6 +63,8 @@ SILENT= all  \
 VPATH=$(SRC-y)
 INC=$(INC-y:%=-I%)
 
+all : debug devtest
+
 ifeq ($(DEFCONF),)
 config : $(AUTOGEN_DIR) $(CONFIG_PY)
 	$(PY) $(CONFIG_PY) -c -i $(CONFIG_ENTRY) -o $(CONFIG_TARGET) -g $(CONFIG_AUTOGEN)
@@ -71,11 +73,14 @@ config : $(AUTOGEN_DIR) $(CONFIG_PY)
 	$(PY) $(CONFIG_PY) -s -i $(CONFIG_DIR)/$(DEFCONF) -t $(CONFIG_ENTRY) -o $(CONFIG_TARGET) -g $(CONFIG_AUTOGEN)
 endif
 
-all : debug devtest
 
 debug : $(DBG_OBJ_CACHE) $(DBG_STATIC_TARGET) $(DBG_DYNAMIC_TARGET) 
 
+release :$(REL_OBJ_CACHE) $(REL_STATIC_TARGET) $(REL_DYNAMIC_TARGET)
+
 devtest : $(DBG_UT_TARGET)
+
+reltest : $(REL_UT_TARGET)
 
 $(DBG_UT_TARGET) : $(DBG_OBJS)
 	@echo "Build unit test target...$@"
@@ -88,8 +93,21 @@ $(DBG_STATIC_TARGET): $(DBG_OBJS)
 $(DBG_DYNAMIC_TARGET): $(DBG_OBJS)
 	@echo "Build so target...$@"
 	$(CXX) -o $@ $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_OBJS)
+
+$(REL_UT_TARGET) : $(REL_OBJS)
+	@echo "Build unit test target...$@"
+	$(CXX) -o $@ $(REL_OBJS) $(INC)
+	
+$(REL_STATIC_TARGET): $(REL_OBJS)
+	@echo "Build static archive...$@"
+	$(AR) rcs -o $@ $(REL_OBJS)
+	
+$(REL_DYNAMIC_TARGET): $(REL_OBJS)
+	@echo "Build so target...$@"
+	$(CXX) -o $@ $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_OBJS)
 	
 $(CONFIG_PY):
+	@echo "Installing jconfigpy into $(TOOL_DIR)"
 	$(PIP) install jconfigpy -t $(TOOL_DIR)
 	
 
@@ -97,13 +115,15 @@ $(DBG_OBJ_CACHE)/%.do:%.cpp
 	@echo "Compile... $@"
 	$(CXX) -c -o $@ $(DYN_FLAGS) $(DBG_CXXFLAGS) $(INC) $<
 	
-%.o:%.cpp
+$(REL_OBJ_CACHE)/%.o:%.cpp
 	@echo "Compile... $@"
 	$(CXX) -c -o $@ $(DYN_FLAGS) $(REL_CXXFLAGS) $(INC) $<
 
 $(DBG_OBJ_CACHE) $(REL_OBJ_CACHE) $(AUTOGEN_DIR) :
 	@echo "MKDIR... $@"
 	$(MKDIR) $@
+
+
 
 clean:
 	rm -rf $(DBG_STATIC_TARGET) $(DBG_DYNAMIC_TARGET) $(DBG_OBJS)\
