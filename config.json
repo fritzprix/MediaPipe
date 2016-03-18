@@ -1,0 +1,30 @@
+{
+	"ROOT_RECIPE":{
+		"type":"recipe",
+		"path":"recipe.mk"
+	},
+	"FLV" : {
+		"type":"bool",
+		"default":"y"
+	},
+	"CORE" : {
+		"type":"bool",
+		"default":"y"
+	},
+	"FLV_CONFIG" : {
+		"type":"config",
+		"path":"./flv/config.json"
+	},
+	"CORE_CONFIG" : {
+		"type":"config",
+		"path":"./core/config.json"
+	},
+	"UNIT_TEST" : {
+		"type":"string",
+		"default":"rtmp_upstream"
+	},
+	"UNIT_TEST_CONFIG" : {
+		"type":"config",
+		"path":"./test/config.json"
+	}
+}

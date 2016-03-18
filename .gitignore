@@ -1,3 +1,10 @@
+# Temporary directory
+Debug/
+Release/
+autogen/
+tools/
+
+
 # Compiled Object files
 *.slo
 *.lo
@@ -27,3 +34,5 @@
 *.exe
 *.out
 *.app
+
+.*

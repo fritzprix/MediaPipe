@@ -15,7 +15,16 @@
 
 #include "MediaStream.h"
 
-namespace MediaPipe {
+using namespace MediaPipe;
+
+MediaContext::MediaContext(){ };
+MediaContext::~MediaContext(){ };
+
+MediaStream::MediaStream(void){ }
+MediaStream::~MediaStream(void){ }
+
+MediaStream::Serializable::Serializable() { };
+MediaStream::Serializable::~Serializable() { };
 
 
 MediaFileStream::MediaFileStream(const char* fname)
@@ -69,4 +78,3 @@ ssize_t MediaFileStream::write(const uint8_t* wb, size_t sz)
 	return ::write(fd, wb, sz);
 }
 
-}

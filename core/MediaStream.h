@@ -20,6 +20,7 @@ namespace MediaPipe {
 
 class MediaContext {
 public:
+	MediaContext();
 	virtual ~MediaContext();
 };
 
