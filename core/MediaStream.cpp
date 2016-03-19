@@ -15,7 +15,7 @@
 
 #include "MediaStream.h"
 
-using namespace MediaPipe;
+namespace MediaPipe {
 
 MediaContext::MediaContext(){ };
 MediaContext::~MediaContext(){ };
@@ -76,5 +76,7 @@ ssize_t MediaFileStream::write(const uint8_t* wb, size_t sz)
 		exit(fd);
 	}
 	return ::write(fd, wb, sz);
+}
+
 }
 

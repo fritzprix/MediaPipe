@@ -11,9 +11,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "MediaStream.h"
+#include "core/MediaStream.h"
+#include "AMF0.h"
 
 namespace MediaPipe {
+
 class FLVTag : MediaStream::Serializable, MediaContext {
 public:
 	FLVTag();
@@ -42,7 +44,14 @@ private:
 	TagType  type;				// video / audio / datascript
 };
 
-class FLVVideoTag :  MediaStream::Serializable {
+class FLVPayload {
+public:
+	FLVPayload();
+	virtual ~FLVPayload();
+	virtual ssize_t readData(const MediaContext* ctx, uint8_t* data) = 0;
+};
+
+class FLVVideoTag :  MediaStream::Serializable , FLVPayload {
 public:
 	FLVVideoTag(size_t bsz);
 	~FLVVideoTag();
@@ -95,7 +104,7 @@ private:
 	uint32_t cts;				// composition time stamp which eventually (pts - dts) in millisec
 };
 
-class FLVAudioTag :  MediaStream::Serializable {
+class FLVAudioTag :  MediaStream::Serializable, FLVPayload {
 public:
 	FLVAudioTag(size_t bsz);
 	~FLVAudioTag();
@@ -175,13 +184,18 @@ private:
 	uint8_t* obj_buffer;
 };
 
-class FLVDataScriptTag : MediaStream::Serializable {
+class FLVDataScriptTag : MediaStream::Serializable ,FLVPayload {
 public:
 	FLVDataScriptTag();
 	~FLVDataScriptTag();
 
 	ssize_t serialize(MediaContext* ctx, MediaStream* stream);
 	ssize_t deserialize(MediaContext* ctx, MediaStream* stream);
+
+	ssize_t readData(const MediaContext* ctx, uint8_t* data);
+	AMF0* getScriptData(void);
+private:
+	AMF0* amf_script;
 };
 
 }

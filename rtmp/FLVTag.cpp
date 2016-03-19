@@ -11,9 +11,15 @@
 
 #include <stdio.h>
 #include <string.h>
+
+
+
+/**********************************************************************************/
+/*******   start of type definition to be used for parsing flv stream   ***********/
+/**********************************************************************************/
 typedef struct {
 	uint8_t 	_[3];
-}__attribute__((packed)) uint24_t;
+} __attribute__((packed)) uint24_t;
 
 typedef struct {
 	uint8_t 	type;
@@ -21,7 +27,7 @@ typedef struct {
 	uint24_t	time_stmp;
 	uint8_t		time_stmp_ex;
 	uint24_t	stream_id;
-}__attribute__((packed)) flv_tag_t;
+} __attribute__((packed)) flv_tag_t;
 
 typedef struct {
 #define AAC_SEQ_HEADER 	((uint8_t) 0)
@@ -35,12 +41,12 @@ typedef struct {
 		flv_aac_audio_t		aac_ex;
 		uint8_t				_data;
 	}__attribute__((packed)) ;
-}__attribute__((packed)) flv_audio_t;
+} __attribute__((packed)) flv_audio_t;
 
 typedef struct {
 	uint8_t					pkt_type;
 	uint24_t				cps_time;
-}__attribute__((packed)) flv_video_avc_t;
+} __attribute__((packed)) flv_video_avc_t;
 
 typedef struct {
 	uint8_t 				flags;
@@ -48,7 +54,109 @@ typedef struct {
 		flv_video_avc_t 		avc_ex;
 		uint8_t					_data[4];
 	}__attribute__((packed));
-}__attribute__((packed)) flv_video_t;
+} __attribute__((packed)) flv_video_t;
+
+
+/*
+ * forward decl. of flv script object types
+ */
+typedef struct flv_script_data_obj  flv_script_data_obj_t;
+typedef struct flv_script_data_val  flv_script_data_val_t;
+typedef struct flv_script_data_str  flv_script_data_str_t;
+typedef struct flv_script_data_date  flv_script_data_date_t;
+typedef struct flv_script_data_lstr  flv_script_data_lstr_t;
+typedef struct flv_script_data_vlen	 flv_script_data_vlen_t;
+typedef struct flv_script_data_obj_end  flv_script_data_obj_ent_t;
+typedef struct flv_script_emca_array  flv_script_emca_array_t;
+typedef struct flv_script_strict_array flv_script_strict_array_t;
+
+
+struct flv_script_data_obj_end{
+	uint24_t					marker;
+} __attribute__((packed));
+
+
+/**
+ *  SCRIPTDATASTRING
+ */
+struct flv_script_data_str {
+	uint16_t					str_len;
+	char						str_data;
+} __attribute__((packed));
+
+/*
+ * SCRIPTDATALONGSTRING
+ */
+struct flv_script_data_lstr {
+	uint32_t		str_len;
+	char			str_data;
+} __attribute__((packed));
+
+struct flv_script_data_date {
+	double 			datetime;
+	uint16_t		utc_offset;
+} __attribute__((packed));
+
+struct flv_script_obj_property {
+	flv_script_data_str_t		prop_name;
+	uint8_t						prop_value;	// begining of SCRIPTDATAVALUE
+};
+
+/**
+ * SCRIPTDATAOBJECT
+ */
+struct flv_script_data_obj {
+	flv_script_obj_property		script_obj_property_start;	// array of properties until end marker
+} __attribute__((packed));
+
+struct flv_script_emca_array {
+	uint32_t					approx_sz;
+	uint8_t						scrit_obj_property_start; // beginning of SCRIPTDATAOBJECTPROPERY
+} __attribute__((packed));
+
+struct flv_script_strict_array {
+	uint32_t					size;
+	uint8_t						script_data_val_start;
+};
+
+/**
+ *  SCRIPTDATAVALUE
+ */
+struct flv_script_data_val {
+#define SCRIPT_DATA_NUMBER			((uint8_t) 0)
+#define SCRIPT_DATA_BOOL			((uint8_t) 1)
+#define SCRIPT_DATA_STRING			((uint8_t) 2)
+#define SCRIPT_DATA_OBJECT			((uint8_t) 3)
+#define SCRIPT_DATA_MOVIE_CLIP		((uint8_t) 4)
+#define SCRIPT_DATA_NULL			((uint8_t) 5)
+#define SCRIPT_DATA_REF				((uint8_t) 7)
+#define SCRIPT_DATA_ECMA_AR			((uint8_t) 8)
+#define SCRIPT_DATA_STRICT_AR		((uint8_t) 10)
+#define SCRIPT_DATE_TYPE			((uint8_t) 11)
+#define SCRIPT_LONG_STRING			((uint8_t) 12)
+	uint8_t							type;
+	union {
+		double						number;
+		uint8_t						boolean;
+		flv_script_data_str_t		str;
+		flv_script_data_obj_t		objs;
+		flv_script_data_str_t		movie_clip_path;
+		uint16_t					ref;
+		flv_script_emca_array_t		emca_arr;
+		flv_script_strict_array_t 	strict_arr;
+		flv_script_data_date		date;
+		flv_script_data_lstr_t		lstr;
+	} val;
+} __attribute__((packed));
+
+
+typedef struct {
+	flv_script_data_val_t			name;
+} __attribute__((packed)) flv_script_t;
+
+/**********************************************************************************/
+/*******     end of type definition to be used for parsing flv stream   ***********/
+/**********************************************************************************/
 
 
 static uint32_t __bswap_u24_to_u32(uint24_t* u);
@@ -149,6 +257,7 @@ FLVAudioTag::FLVAudioTag(size_t bsz) {
 	 *
 	 *
 	 */
+
 	this->obj_buffer = new uint8_t[bsz + sizeof(flv_audio_t)];
 
 	if(!this->obj_buffer)
@@ -624,6 +733,46 @@ void FLVVideoTag::setFrameType(FrameType frameType) {
 }
 
 
+
+FLVDataScriptTag::FLVDataScriptTag() {
+	amf_script = new AMF0();
+}
+
+FLVDataScriptTag::~FLVDataScriptTag() {
+
+}
+
+
+ssize_t FLVDataScriptTag::serialize(MediaContext* ctx,
+		MediaStream* stream) {
+	if(!stream)
+	{
+		return -1;
+	}
+	return amf_script->serialize(ctx, stream);
+}
+
+ssize_t FLVDataScriptTag::deserialize(MediaContext* ctx, MediaStream* stream) {
+	if(!stream)
+	{
+		return -1;
+	}
+	return amf_script->deserialize(ctx, stream);
+}
+
+ssize_t FLVDataScriptTag::readData(const MediaContext* ctx, uint8_t* data) {
+	if(!data)
+	{
+		return -1;
+	}
+	return amf_script->read(data);
+}
+
+MediaPipe::FLVPayload::FLVPayload() { }
+
+MediaPipe::FLVPayload::~FLVPayload() { }
+
+
 }
 
 static uint32_t __bswap_u24_to_u32(uint24_t* u)
@@ -638,3 +787,5 @@ static void __bswap_u32_to_u24(uint32_t s, uint24_t* u)
 	u->_[1] = s >> 8;
 	u->_[2] = s & 0xFF;
 }
+
+

@@ -3,7 +3,7 @@
 		"type":"recipe",
 		"path":"recipe.mk"
 	},
-	"FLV" : {
+	"RTMP" : {
 		"type":"bool",
 		"default":"y"
 	},
@@ -11,9 +11,9 @@
 		"type":"bool",
 		"default":"y"
 	},
-	"FLV_CONFIG" : {
+	"RTMP_CONFIG" : {
 		"type":"config",
-		"path":"./flv/config.json"
+		"path":"./rtmp/config.json"
 	},
 	"CORE_CONFIG" : {
 		"type":"config",

@@ -1,5 +1,5 @@
 {
-	"FLV_RECIPE" : {
+	"RTMP_RECIPE" : {
 		"type":"recipe",
 		"path":"recipe.mk"
 	}
