@@ -1,0 +1,12 @@
+{
+	"CDSL_REP":{
+	   "type" : "repo",
+	   "name" : "cdsl",
+	   "url" : "https://github.com/fritzprix/cdsl.git",
+	   "out" : "./dep/"
+	},
+	"DEP_AUTORECIPE":{
+		"type":"recipe",
+		"path":"autorecipe.mk"
+	}
+}

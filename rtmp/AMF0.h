@@ -10,6 +10,7 @@
 #define RTMP_AMF0_H_
 
 #include "core/MediaStream.h"
+#include "cdsl_dlist.h"
 
 namespace MediaPipe {
 
@@ -21,6 +22,8 @@ public:
 		virtual ~AMF0Object();
 		virtual size_t getSize(void) = 0;
 		virtual ssize_t read(uint8_t* data) = 0;
+	private:
+		dlistNode_t	list_node;
 	};
 
 	AMF0();
@@ -33,6 +36,7 @@ public:
 	AMF0Object* remove(int idx);
 	int lenght(void);
 	void remove(AMF0Object* obj);
+
 };
 
 

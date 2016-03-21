@@ -6,16 +6,19 @@
  */
 
 #include "AMF0.h"
+#include "cdsl_dlist.h"
 
 namespace MediaPipe {
 
 AMF0::AMF0Object::AMF0Object() {
+	cdsl_dlistInit(&list_node);
 }
 
 AMF0::AMF0Object::~AMF0Object() {
 }
 
 AMF0::AMF0() {
+
 }
 
 AMF0::~AMF0() {

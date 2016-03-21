@@ -11,6 +11,9 @@ PIP:=pip
 TOOL_DIR:=./tools
 CONFIG_PY:= ./tools/jconfigpy/jconfigpy.py
 
+LIB_DIR=$(LDIR-y:%=-L%)
+LIB=$(SLIB-y:%=-l:%)
+
 # Dev build library object
 DBG_STATIC_TARGET=libmpiped.a
 DBG_DYNAMIC_TARGET=libmpiped.so
@@ -84,7 +87,7 @@ reltest : $(REL_UT_TARGET)
 
 $(DBG_UT_TARGET) : $(DBG_OBJS)
 	@echo "Build unit test target...$@"
-	$(CXX) -o $@ $(DBG_OBJS) $(INC) 
+	$(CXX) -o $@ $(DBG_OBJS) $(INC) $(LIB_DIR) $(LIB)
 
 $(DBG_STATIC_TARGET): $(DBG_OBJS)
 	@echo "Build static archive...$@"
@@ -92,11 +95,11 @@ $(DBG_STATIC_TARGET): $(DBG_OBJS)
 	
 $(DBG_DYNAMIC_TARGET): $(DBG_OBJS)
 	@echo "Build so target...$@"
-	$(CXX) -o $@ $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_OBJS)
+	$(CXX) -o $@ $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_OBJS) $(LIB_DIR) $(LIB)
 
 $(REL_UT_TARGET) : $(REL_OBJS)
 	@echo "Build unit test target...$@"
-	$(CXX) -o $@ $(REL_OBJS) $(INC)
+	$(CXX) -o $@ $(REL_OBJS) $(INC) $(LIB_DIR) $(LIB)
 	
 $(REL_STATIC_TARGET): $(REL_OBJS)
 	@echo "Build static archive...$@"
@@ -104,7 +107,7 @@ $(REL_STATIC_TARGET): $(REL_OBJS)
 	
 $(REL_DYNAMIC_TARGET): $(REL_OBJS)
 	@echo "Build so target...$@"
-	$(CXX) -o $@ $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_OBJS)
+	$(CXX) -o $@ $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_OBJS) $(LIB_DIR) $(LIB)
 	
 $(CONFIG_PY):
 	@echo "Installing jconfigpy into $(TOOL_DIR)"
@@ -113,11 +116,11 @@ $(CONFIG_PY):
 
 $(DBG_OBJ_CACHE)/%.do:%.cpp
 	@echo "Compile... $@"
-	$(CXX) -c -o $@ $(DYN_FLAGS) $(DBG_CXXFLAGS) $(INC) $<
+	$(CXX) -c -o $@ $(DYN_FLAGS) $(DBG_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
 	
 $(REL_OBJ_CACHE)/%.o:%.cpp
 	@echo "Compile... $@"
-	$(CXX) -c -o $@ $(DYN_FLAGS) $(REL_CXXFLAGS) $(INC) $<
+	$(CXX) -c -o $@ $(DYN_FLAGS) $(REL_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
 
 $(DBG_OBJ_CACHE) $(REL_OBJ_CACHE) $(AUTOGEN_DIR) :
 	@echo "MKDIR... $@"
@@ -126,9 +129,9 @@ $(DBG_OBJ_CACHE) $(REL_OBJ_CACHE) $(AUTOGEN_DIR) :
 
 
 clean:
-	rm -rf $(DBG_STATIC_TARGET) $(DBG_DYNAMIC_TARGET) $(DBG_OBJS)\
-		 $(REL_STATIC_TARGET) $(REL_DYNAMIC_TARGET) $(REL_OBJS) $(UTEST_TARGET)\
+	rm -rf $(DBG_STATIC_TARGET) $(DBG_DYNAMIC_TARGET) $(DBG_OBJS) $(DBG_UT_TARGET)\
+		 $(REL_STATIC_TARGET) $(REL_DYNAMIC_TARGET) $(REL_OBJS) $(REL_UT_TARGET)\
 		$(DBG_OBJ_CACHE) $(REL_OBJ_CACHE)
 		
 config_clean:
-	rm -rf $(CONFIG_TARGET) $(CONFIG_AUTOGEN) $(AUTOGEN_DIR) 
+	rm -rf $(CONFIG_TARGET) $(CONFIG_AUTOGEN) $(AUTOGEN_DIR) $(REPO-y) $(LDIR-y) .config 
