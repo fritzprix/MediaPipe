@@ -6,10 +6,14 @@
  */
 
 #include "FLVTag.h"
+#include "AMF0.h"
 
 
 int main(void)
 {
-	MediaPipe::FLVTag* flvTag = new MediaPipe::FLVTag();
-	MediaPipe::FLVAudioTag* audio = new MediaPipe::FLVAudioTag(1 << 16);
+	MediaPipe::AMF0* amf0 = new MediaPipe::AMF0();
+	MediaPipe::AMF0BooleanData* bdata = new MediaPipe::AMF0BooleanData();
+	amf0->add(bdata);
+	MediaPipe::AMF0::AMF0Base* base = (MediaPipe::AMF0::AMF0Base*) bdata;
+//	base->serialize(NULL,NULL);
 }

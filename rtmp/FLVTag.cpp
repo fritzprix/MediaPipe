@@ -735,7 +735,6 @@ void FLVVideoTag::setFrameType(FrameType frameType) {
 
 
 FLVDataScriptTag::FLVDataScriptTag() {
-	amf_script = new AMF0();
 }
 
 FLVDataScriptTag::~FLVDataScriptTag() {
@@ -749,7 +748,7 @@ ssize_t FLVDataScriptTag::serialize(MediaContext* ctx,
 	{
 		return -1;
 	}
-	return amf_script->serialize(ctx, stream);
+	return amf_script.serialize(ctx, stream);
 }
 
 ssize_t FLVDataScriptTag::deserialize(MediaContext* ctx, MediaStream* stream) {
@@ -757,7 +756,7 @@ ssize_t FLVDataScriptTag::deserialize(MediaContext* ctx, MediaStream* stream) {
 	{
 		return -1;
 	}
-	return amf_script->deserialize(ctx, stream);
+	return amf_script.deserialize(ctx, stream);
 }
 
 ssize_t FLVDataScriptTag::readData(const MediaContext* ctx, uint8_t* data) {
@@ -765,7 +764,7 @@ ssize_t FLVDataScriptTag::readData(const MediaContext* ctx, uint8_t* data) {
 	{
 		return -1;
 	}
-	return amf_script->read(data);
+	return amf_script.read(data);
 }
 
 MediaPipe::FLVPayload::FLVPayload() { }

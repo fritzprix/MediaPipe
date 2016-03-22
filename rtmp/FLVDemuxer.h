@@ -18,8 +18,8 @@ class FLVDemuxer {
 public:
 	class FLVTagHandler {
 	public:
-		FLVTagHandler();
-		virtual ~FLVTagHandler();
+		FLVTagHandler(){};
+		virtual ~FLVTagHandler() {};
 		virtual void onTagHandle(FLVTag* flvTag, FLVPayload* payload) = 0;
 	};
 	FLVDemuxer(MediaStream* input_stream);

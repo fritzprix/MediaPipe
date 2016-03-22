@@ -29,10 +29,5 @@ void FLVDemuxer::parse(size_t vbuf_sz, size_t abuf_sz) {
 
 }
 
-FLVDemuxer::FLVTagHandler::FLVTagHandler() {
-}
-
-FLVDemuxer::FLVTagHandler::~FLVTagHandler() {
-}
 
 } /* namespace MediaPipe */

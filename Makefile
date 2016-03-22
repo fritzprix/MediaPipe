@@ -3,7 +3,7 @@
 -include version.mk
 
 # set build utilities 
-CXX := g++
+CXX := clang++-3.6
 AR := ar
 MKDIR := mkdir
 PY:=python
@@ -46,7 +46,7 @@ DBG_OBJS = $(OBJ-y:%=$(DBG_OBJ_CACHE)/%.do)
 REL_OBJS = $(OBJ-y:%=$(REL_OBJ_CACHE)/%.o)
 
 .PHONY = $(PHONY)
-.SILENT : $(SILENT)
+#.SILENT : $(SILENT)
 
 PHONY= all clean debug release utest
 

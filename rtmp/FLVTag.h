@@ -195,7 +195,7 @@ public:
 	ssize_t readData(const MediaContext* ctx, uint8_t* data);
 	AMF0* getScriptData(void);
 private:
-	AMF0* amf_script;
+	AMF0 amf_script;
 };
 
 }

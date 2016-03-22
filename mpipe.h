@@ -8,7 +8,13 @@
 #ifndef MPIPE_H_
 #define MPIPE_H_
 
+#ifdef __cplusplus
 
+#undef offsetof
+#undef container_of
+
+
+#endif
 
 
 #endif /* MPIPE_H_ */
