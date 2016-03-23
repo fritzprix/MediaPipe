@@ -173,7 +173,7 @@ FLVTag::FLVTag() {
 
 FLVTag::~FLVTag() { }
 
-ssize_t FLVTag::serialize(MediaContext* ctx,MediaStream* stream) {
+ssize_t FLVTag::serialize(void* ctx,MediaStream* stream) {
 	flv_tag_t tag;
 	if(!stream)
 	{
@@ -189,7 +189,7 @@ ssize_t FLVTag::serialize(MediaContext* ctx,MediaStream* stream) {
 	return stream->write((const uint8_t*) &tag, sizeof(flv_tag_t));
 }
 
-ssize_t FLVTag::deserialize(MediaContext* ctx, MediaStream* stream) {
+ssize_t FLVTag::deserialize(void* ctx, const MediaStream* stream) {
 	flv_tag_t tag;
 	if(!stream)
 	{
@@ -206,6 +206,13 @@ ssize_t FLVTag::deserialize(MediaContext* ctx, MediaStream* stream) {
 	}
 	return res;
 }
+
+ssize_t MediaPipe::FLVTag::serialize(void* ctx, uint8_t* into) {
+}
+
+ssize_t MediaPipe::FLVTag::deserialize(void* ctx, const uint8_t* from) {
+}
+
 
 FLVTag::TagType FLVTag::getType(void) const{
 	return type;
@@ -237,6 +244,15 @@ uint32_t FLVTag::getStreamID(void) const {
 
 void FLVTag::setStreamID(uint32_t stream_id) {
 	this->stream_id = stream_id;
+}
+
+Payload<FLVTag>* FLVTag::getPayload(){
+
+}
+
+bool FLVTag::setPayload(const Payload<FLVTag>* payload)
+{
+
 }
 
 FLVAudioTag::FLVAudioTag(size_t bsz) {
@@ -272,7 +288,7 @@ FLVAudioTag::~FLVAudioTag() {
 }
 
 
-ssize_t FLVAudioTag::serialize(MediaContext* ctx,MediaStream* stream) {
+ssize_t FLVAudioTag::serialize(FLVTag* ctx,MediaStream* stream) {
 	if(!stream || !ctx)
 	{
 		::perror("null pointer argument !!");
@@ -309,14 +325,13 @@ ssize_t FLVAudioTag::serialize(MediaContext* ctx,MediaStream* stream) {
 	return stream->write((uint8_t*) &audio_tag[1], tag->getSize() - audio_tag_sz) + audio_tag_sz;
 }
 
-ssize_t FLVAudioTag::deserialize(MediaContext* ctx,MediaStream* stream) {
+ssize_t FLVAudioTag::deserialize(FLVTag* ctx, const MediaStream* stream) {
 	if(!stream || !ctx)
 	{
 		::perror("null pointer argument !!");
 		::exit(-1);
 	}
 
-	FLVTag* tag = (FLVTag* ) ctx;
 	uint8_t audio_tag_sz = 0;
 	uint8_t pread_offset = 0;
 	flv_audio_t* audio_tag = (flv_audio_t*) obj_buffer;
@@ -362,8 +377,52 @@ ssize_t FLVAudioTag::deserialize(MediaContext* ctx,MediaStream* stream) {
 	this->snd_sz = (SoundSize) ((audio_tag->flags & 0x6) >> 1);
 	this->snd_type = (SoundType) (audio_tag->flags & 0x1);
 
-	return stream->read(((uint8_t*) &audio_tag[1]) + pread_offset, tag->getSize() - audio_tag_sz) + audio_tag_sz;
+	return stream->read(((uint8_t*) &audio_tag[1]) + pread_offset, ctx->getSize() - audio_tag_sz) + audio_tag_sz;
 }
+
+
+
+ssize_t MediaPipe::FLVAudioTag::serialize(FLVTag* ctx, uint8_t* into) {
+	if(!into || !ctx)
+		return -1;
+	const FLVTag* tag = (const FLVTag* ) ctx;
+	size_t psz = 0, hsz = 0;
+	flv_audio_t* audio_tag = (flv_audio_t*) obj_buffer;
+	/*
+	 * get payload size in bytes
+	 * payload size = size of audio_tag + size of raw audio data in bytes
+	 */
+	psz = tag->getSize();
+
+	// calculate header size depends on sound format
+	if(snd_format == AAC)
+	{
+		hsz = sizeof(flv_audio_t);
+	}
+	else
+	{
+		hsz = sizeof(audio_tag->flags);
+	}
+
+	::memcpy(into, &audio_tag[1], psz - hsz);
+	return psz - hsz;
+}
+
+ssize_t FLVAudioTag::deserialize(FLVTag* ctx, const uint8_t* from) {
+
+}
+
+Payload<FLVAudioTag>* FLVAudioTag::getPayload()
+{
+
+}
+
+bool FLVAudioTag::setPayload(const Payload<FLVAudioTag>* )
+{
+
+}
+
+
 
 void FLVAudioTag::setSoundFormat(SoundFormat fmt) {
 	snd_format = fmt;
@@ -393,38 +452,13 @@ void FLVAudioTag::setSoundType(SoundType type) {
 	snd_type = type;
 }
 
-ssize_t FLVAudioTag::readData(const MediaContext* ctx, uint8_t* data) {
-	if(!data || !ctx)
-		return -1;
-	const FLVTag* tag = (const FLVTag* ) ctx;
-	size_t psz = 0, hsz = 0;
-	flv_audio_t* audio_tag = (flv_audio_t*) obj_buffer;
-	/*
-	 * get payload size in bytes
-	 * payload size = size of audio_tag + size of raw audio data in bytes
-	 */
-	psz = tag->getSize();
-
-	// calculate header size depends on sound format
-	if(snd_format == AAC)
-	{
-		hsz = sizeof(flv_audio_t);
-	}
-	else
-	{
-		hsz = sizeof(audio_tag->flags);
-	}
-
-	::memcpy(data, &audio_tag[1], psz - hsz);
-	return psz - hsz;
-}
 
 FLVAudioTag::SoundType FLVAudioTag::getSoundType() const {
 	return snd_type;
 }
 
 
-ssize_t FLVAudioTag::writeData(MediaContext* ctx, uint8_t* payload, size_t sz, SoundFormat format,
+ssize_t FLVAudioTag::writeData(FLVTag* ctx, uint8_t* payload, size_t sz, SoundFormat format,
 		SoundRate rate, SoundSize smpsz, SoundType type, uint32_t timestamp) {
 	if(!payload)
 	{
@@ -454,7 +488,7 @@ ssize_t FLVAudioTag::writeData(MediaContext* ctx, uint8_t* payload, size_t sz, S
 	return sz;
 }
 
-ssize_t FLVAudioTag::writeData(MediaContext* ctx, uint8_t* payload, size_t sz, uint32_t timestamp) {
+ssize_t FLVAudioTag::writeData(FLVTag* ctx, uint8_t* payload, size_t sz, uint32_t timestamp) {
 	if(!payload)
 	{
 		::perror("null pointer argument !\n");
@@ -476,7 +510,7 @@ ssize_t FLVAudioTag::writeData(MediaContext* ctx, uint8_t* payload, size_t sz, u
 	return sz;
 }
 
-ssize_t FLVAudioTag::writeDataAAC(MediaContext* ctx, uint8_t* payload, size_t sz, SoundRate snd_rate,
+ssize_t FLVAudioTag::writeDataAAC(FLVTag* ctx, uint8_t* payload, size_t sz, SoundRate snd_rate,
 		SoundSize smpl_sz, SoundType snd_type, AACPktType aac_ex, uint32_t timestamp) {
 	if(!payload)
 	{
@@ -517,7 +551,7 @@ FLVVideoTag::~FLVVideoTag() {
 	delete this->obj_buffer;
 }
 
-ssize_t FLVVideoTag::serialize(MediaContext* ctx, MediaStream* stream) {
+ssize_t FLVVideoTag::serialize(FLVTag* ctx, MediaStream* stream) {
 	if(!stream || !ctx)
 	{
 		::perror("null pointer argument !\n");
@@ -553,7 +587,31 @@ ssize_t FLVVideoTag::serialize(MediaContext* ctx, MediaStream* stream) {
 	return stream->write((const uint8_t*) &video_tag[1], (tag->getSize() - video_tag_sz));
 }
 
-ssize_t FLVVideoTag::deserialize(MediaContext* ctx, MediaStream* stream) {
+ssize_t MediaPipe::FLVVideoTag::serialize(FLVTag* ctx, uint8_t* into) {
+	if(!into || !ctx)
+	{
+		::perror("null pointer argument");
+		::exit(-1);
+	}
+
+	size_t psz = 0, hsz = 0;
+	const FLVTag* tag = (const FLVTag*) ctx;
+	psz = tag->getSize();
+	flv_video_t* video_tag = (flv_video_t*) obj_buffer;
+	if(this->codec_id == FLVVideoTag::H264_AVC)
+	{
+		hsz = sizeof(flv_video_t);
+	}
+	else
+	{
+		hsz = sizeof(video_tag->flags);
+	}
+
+	::memcpy(into, &video_tag[1], psz - hsz);
+	return psz - hsz;
+}
+
+ssize_t FLVVideoTag::deserialize(FLVTag* ctx, const MediaStream* stream) {
 	if(!stream || !ctx)
 	{
 		::perror("null pointer argument !\n");
@@ -603,7 +661,22 @@ ssize_t FLVVideoTag::deserialize(MediaContext* ctx, MediaStream* stream) {
 	return stream->read(((uint8_t*) &video_tag[1] + pread_offset), tag->getSize() - video_tag_sz );
 }
 
-ssize_t FLVVideoTag::writeDataAVC(MediaContext* ctx, uint8_t* data, size_t sz, FrameType type,
+
+
+ssize_t MediaPipe::FLVVideoTag::deserialize(FLVTag* ctx, const uint8_t* from) {
+}
+
+Payload<FLVVideoTag>* FLVVideoTag::getPayload()
+{
+
+}
+
+bool FLVVideoTag::setPayload(const Payload<FLVVideoTag>* )
+{
+
+}
+
+ssize_t FLVVideoTag::writeDataAVC(FLVTag* ctx, uint8_t* data, size_t sz, FrameType type,
 		CodecID codec, AVCPktType avc_type, uint32_t dts, uint32_t pts) {
 	if(!data || !ctx || !sz)
 	{
@@ -625,7 +698,7 @@ ssize_t FLVVideoTag::writeDataAVC(MediaContext* ctx, uint8_t* data, size_t sz, F
 	return sz;
 }
 
-ssize_t FLVVideoTag::writeData(MediaContext* ctx, uint8_t* data, size_t sz, FrameType type,
+ssize_t FLVVideoTag::writeData(FLVTag* ctx, uint8_t* data, size_t sz, FrameType type,
 		CodecID codec, uint32_t dts, uint32_t pts) {
 	if(!data || !ctx || !sz)
 	{
@@ -656,7 +729,7 @@ ssize_t FLVVideoTag::writeData(MediaContext* ctx, uint8_t* data, size_t sz, Fram
 	return sz;
 }
 
-ssize_t FLVVideoTag::writeData(MediaContext* ctx, uint8_t* data, size_t sz, uint32_t dts, uint32_t pts) {
+ssize_t FLVVideoTag::writeData(FLVTag* ctx, uint8_t* data, size_t sz, uint32_t dts, uint32_t pts) {
 	if(!data || !ctx || !sz)
 	{
 		::perror("null pointer argument");
@@ -682,30 +755,6 @@ ssize_t FLVVideoTag::writeData(MediaContext* ctx, uint8_t* data, size_t sz, uint
 
 	::memcpy(&video_tag[1], data, sz);
 	return sz;
-}
-
-ssize_t FLVVideoTag::readData(const MediaContext* ctx, uint8_t* data) {
-	if(!data || !ctx)
-	{
-		::perror("null pointer argument");
-		::exit(-1);
-	}
-
-	size_t psz = 0, hsz = 0;
-	const FLVTag* tag = (const FLVTag*) ctx;
-	psz = tag->getSize();
-	flv_video_t* video_tag = (flv_video_t*) obj_buffer;
-	if(this->codec_id)
-	{
-		hsz = sizeof(flv_video_t);
-	}
-	else
-	{
-		hsz = sizeof(video_tag->flags);
-	}
-
-	::memcpy(data, &video_tag[1], psz - hsz);
-	return psz - hsz;
 }
 
 FLVVideoTag::AVCPktType FLVVideoTag::getAvcType() const{
@@ -735,6 +784,7 @@ void FLVVideoTag::setFrameType(FrameType frameType) {
 
 
 FLVDataScriptTag::FLVDataScriptTag() {
+	amf_script.setMutable(true);
 }
 
 FLVDataScriptTag::~FLVDataScriptTag() {
@@ -742,37 +792,26 @@ FLVDataScriptTag::~FLVDataScriptTag() {
 }
 
 
-ssize_t FLVDataScriptTag::serialize(MediaContext* ctx,
-		MediaStream* stream) {
-	if(!stream)
-	{
-		return -1;
-	}
-	return amf_script.serialize(ctx, stream);
+ssize_t FLVDataScriptTag::serialize(FLVTag* ctx, MediaStream* stream) {
 }
 
-ssize_t FLVDataScriptTag::deserialize(MediaContext* ctx, MediaStream* stream) {
-	if(!stream)
-	{
-		return -1;
-	}
-	return amf_script.deserialize(ctx, stream);
+ssize_t FLVDataScriptTag::serialize(FLVTag* ctx, uint8_t* data) {
 }
 
-ssize_t FLVDataScriptTag::readData(const MediaContext* ctx, uint8_t* data) {
-	if(!data)
-	{
-		return -1;
-	}
-	return amf_script.read(data);
+ssize_t FLVDataScriptTag::deserialize(FLVTag* ctx, const  MediaStream* stream) {
 }
 
-MediaPipe::FLVPayload::FLVPayload() { }
-
-MediaPipe::FLVPayload::~FLVPayload() { }
-
-
+AMF0* MediaPipe::FLVDataScriptTag::getScriptData(void) {
 }
+
+
+ssize_t MediaPipe::FLVDataScriptTag::deserialize(FLVTag* ctx,
+		const uint8_t* from) {
+}
+
+
+}		// end of namespace MediaPipe
+
 
 static uint32_t __bswap_u24_to_u32(uint24_t* u)
 {
@@ -786,5 +825,8 @@ static void __bswap_u32_to_u24(uint32_t s, uint24_t* u)
 	u->_[1] = s >> 8;
 	u->_[2] = s & 0xFF;
 }
+
+
+
 
 

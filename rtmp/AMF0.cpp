@@ -70,64 +70,69 @@ struct amf0_val {
 
 namespace MediaPipe {
 
-AMF0::AMF0Base::AMF0Base()
+AMF0Base::AMF0Base()
 {
 	cdsl_slistNodeInit(this);
 }
 
-AMF0::AMF0Base::~AMF0Base()
+AMF0Base::~AMF0Base()
 {
 
 }
 
 
-AMF0::Iterator::Iterator(AMF0* amf)
-{
-	cdsl_slistIterInit(&amf->mutable_lentry,this);
+AMF0::AMF0Iterator::AMF0Iterator(AMF0* iterable,bool is_mutable) {
 }
 
-AMF0::Iterator::~Iterator(){ }
-
-bool AMF0::Iterator::hasNext()
-{
-	return cdsl_slistIterHasNext(this);
+AMF0::AMF0Iterator::~AMF0Iterator() {
 }
 
-AMF0::AMF0Base* AMF0::Iterator::getNext()
-{
-	return (AMF0::AMF0Base*) cdsl_slistIterNext(this);
+bool AMF0::AMF0Iterator::hasNext() {
 }
 
-void AMF0::Iterator::remove()
+AMF0Base* AMF0::AMF0Iterator::next() {
+}
+
+void AMF0::AMF0Iterator::remove() {
+}
+
+AMF0::AMF0(bool is_mutable)
 {
-	cdsl_slistIterRemove(this);
+	cdsl_slistEntryInit(this);
 }
 
 AMF0::AMF0()
 {
-	cdsl_slistEntryInit(&immutable_lentry);
-	cdsl_slistEntryInit(&mutable_lentry);
-	iter = new Iterator(this);
+	is_mutable = true;
 }
 
 AMF0::~AMF0()
 {
-	while(!cdsl_slistIsEmpty(&immutable_lentry))
+	while(!cdsl_slistIsEmpty(this))
 	{
 	}
 }
+ssize_t AMF0::serialize(void* ctx, uint8_t* into) {
 
-ssize_t AMF0::serialize(MediaContext* ctx, MediaStream* stream)
+}
+
+ssize_t AMF0::serialize(void* ctx, MediaStream* stream)
 {
 
 }
 
-ssize_t AMF0::deserialize(MediaContext* ctx, MediaStream* stream)
+ssize_t AMF0::deserialize(void* ctx, const uint8_t* from)
+{
+
+}
+
+
+ssize_t AMF0::deserialize(void* ctx, const MediaStream* stream)
 {
 	if(!stream)
 		return -1;
-	AMF0::AMF0Base* val = NULL;
-	AMF0::AMF0Type type;
+	AMF0Base* val = NULL;
+	AMF0Base::AMF0Type type;
 	FLVTag* flv_t = (FLVTag*) ctx;
 	size_t t_sz = flv_t->getSize();
 	size_t sz = 0;
@@ -137,122 +142,150 @@ ssize_t AMF0::deserialize(MediaContext* ctx, MediaStream* stream)
 			return sz;
 		sz++;
 		switch(type){
-		case NUMBER:
-			val = (AMF0::AMF0Base*)  new AMF0NumberData();
+		case AMF0Base::NUMBER:
+			val = (AMF0Base*)  new AMF0NumberData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case BOOLEAN:
-			val = (AMF0::AMF0Base*) new AMF0BooleanData();
+		case AMF0Base::BOOLEAN:
+			val = (AMF0Base*) new AMF0BooleanData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case STRING:
-			val = (AMF0::AMF0Base*) new AMF0StringData();
+		case AMF0Base::STRING:
+			val = (AMF0Base*) new AMF0StringData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case OBJECT:
-			val = (AMF0::AMF0Base*) new AMF0ObjectData();
+		case AMF0Base::OBJECT:
+			val = (AMF0Base*) new AMF0ObjectData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case REF:
-			val = (AMF0::AMF0Base*) new AMF0ReferenceData();
+		case AMF0Base::REF:
+			val = (AMF0Base*) new AMF0ReferenceData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case ECMA_ARRAY:
-			val = (AMF0::AMF0Base*) new AMF0ECMAArrayData();
+		case AMF0Base::ECMA_ARRAY:
+			val = (AMF0Base*) new AMF0ECMAArrayData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case OBJ_END:
+		case AMF0Base::OBJ_END:
 			// object end is not handled here
 			break;
-		case UND:
+		case AMF0Base::UND:
 			break;
-		case NUL:
+		case AMF0Base::NUL:
 			break;
-		case MV_CLIP:
+		case AMF0Base::MV_CLIP:
 			break;
-		case STRICT_ARRAY:
-			val = (AMF0::AMF0Base*) new AMF0StrictArrayData();
+		case AMF0Base::STRICT_ARRAY:
+			val = (AMF0Base*) new AMF0StrictArrayData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case DATE:
-			val = (AMF0::AMF0Base*) new AMF0DateData();
+		case AMF0Base::DATE:
+			val = (AMF0Base*) new AMF0DateData();
 			sz += val->deserialize(ctx, stream);
 			break;
-		case LSTRING:
-			val = (AMF0::AMF0Base*) new AMF0LongStringData();
+		case AMF0Base::LSTRING:
+			val = (AMF0Base*) new AMF0LongStringData();
 			sz += val->deserialize(ctx, stream);
 			break;
 		}
-		cdsl_slistPutTail(&immutable_lentry,val);
+		cdsl_slistPutTail(this,val);
 	}
 	return sz;
 }
 
-ssize_t AMF0::read(uint8_t* data)
-{
 
+Iterator<AMF0Base>* AMF0::iterator() {
+	return new AMF0Iterator(this,is_mutable);
 }
-
 
 
 int AMF0::add(AMF0Base* obj)
 {
-	return cdsl_slistPutTail(&mutable_lentry,obj);
+	return cdsl_slistPutTail(this,obj);
 }
 
 void AMF0::remove(AMF0Base* obj)
 {
-	cdsl_slistRemove(&mutable_lentry, obj);
+	cdsl_slistRemove(this, obj);
 }
+
+void AMF0::setMutable(bool is_mutable)
+{
+
+}
+
+
 
 int AMF0::length(void)
 {
-	return cdsl_slistSize(&mutable_lentry) + cdsl_slistSize(&immutable_lentry);
+	return cdsl_slistSize(this);
 }
 
-AMF0NumberData::AMF0NumberData() {
-	val = 0.0;
+
+AMF0NumberData::AMF0NumberData()
+{
+
 }
 
-AMF0NumberData::~AMF0NumberData() {
+AMF0NumberData::~AMF0NumberData()
+{
+
 }
 
-ssize_t AMF0NumberData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0NumberData::serialize(void* ctx, MediaStream* stream)
+{
 }
 
-ssize_t AMF0NumberData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0NumberData::serialize(void* ctx, uint8_t* into) {
 }
 
-double AMF0NumberData::getValue() {
+ssize_t AMF0NumberData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-AMF0::AMF0Type AMF0NumberData::getType() {
+
+ssize_t AMF0NumberData::deserialize(void* ctx, const uint8_t* from) {
 }
 
-AMF0BooleanData::AMF0BooleanData() {
-	val = false;
+AMF0Base::AMF0Type AMF0NumberData::getType()
+{
+
+}
+
+double AMF0NumberData::getValue()
+{
+
+}
+
+AMF0BooleanData::AMF0BooleanData()
+{
+
 }
 
 AMF0BooleanData::~AMF0BooleanData() {
+}
+
+ssize_t AMF0BooleanData::serialize(void* ctx, MediaStream* stream) {
+}
+
+ssize_t AMF0BooleanData::serialize(void* ctx, uint8_t* into) {
+}
+
+ssize_t AMF0BooleanData::deserialize(void* ctx, const MediaStream* stream) {
+}
+
+ssize_t AMF0BooleanData::deserialize(void* ctx, const uint8_t* from) {
+}
+
+AMF0Base::AMF0Type AMF0BooleanData::getType()
+{
 
 }
 
-ssize_t AMF0BooleanData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
-	::printf("bool serialized\n");
+bool AMF0BooleanData::getValue()
+{
+
 }
 
-ssize_t AMF0BooleanData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
-}
-
-AMF0::AMF0Type AMF0BooleanData::getType() {
-}
-
-bool AMF0BooleanData::getValue() {
-}
 
 AMF0StringData::AMF0StringData() {
 }
@@ -260,18 +293,26 @@ AMF0StringData::AMF0StringData() {
 AMF0StringData::~AMF0StringData() {
 }
 
-ssize_t AMF0StringData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0StringData::serialize(void* ctx, MediaStream* stream) {
 }
 
-ssize_t AMF0StringData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0StringData::serialize(void* ctx, uint8_t* into) {
 }
 
-AMF0::AMF0Type AMF0StringData::getType() {
+ssize_t AMF0StringData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-const std::string* AMF0StringData::getValue() {
+ssize_t AMF0StringData::deserialize(void* ctx, const uint8_t* from) {
+}
+
+AMF0Base::AMF0Type AMF0StringData::getType()
+{
+
+}
+
+const std::string* AMF0StringData::getValue()
+{
+
 }
 
 AMF0ObjectData::AMF0ObjectData() {
@@ -280,38 +321,61 @@ AMF0ObjectData::AMF0ObjectData() {
 AMF0ObjectData::~AMF0ObjectData() {
 }
 
-ssize_t AMF0ObjectData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0ObjectData::serialize(void* ctx, MediaStream* stream) {
 }
 
-ssize_t AMF0ObjectData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0ObjectData::serialize(void* ctx, uint8_t* into) {
 }
 
-AMF0::AMF0Type AMF0ObjectData::getType() {
+ssize_t AMF0ObjectData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-const AMF0* AMF0ObjectData::getValue() {
+ssize_t AMF0ObjectData::deserialize(void* ctx, const uint8_t* from) {
+}
+
+AMF0Base::AMF0Type AMF0ObjectData::getType()
+{
+
+}
+
+const AMF0* AMF0ObjectData::getValue()
+{
+
 }
 
 AMF0ReferenceData::AMF0ReferenceData() {
+
 }
 
 AMF0ReferenceData::~AMF0ReferenceData() {
+
 }
 
-ssize_t AMF0ReferenceData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+
+ssize_t AMF0ReferenceData::serialize(void* ctx, MediaStream* stream) {
+
 }
 
-ssize_t AMF0ReferenceData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0ReferenceData::serialize(void* ctx, uint8_t* into) {
+
 }
 
-AMF0::AMF0Type AMF0ReferenceData::getType() {
+ssize_t AMF0ReferenceData::deserialize(void* ctx, const MediaStream* stream) {
+
 }
 
-uint16_t AMF0ReferenceData::getValue() {
+ssize_t AMF0ReferenceData::deserialize(void* ctx, const uint8_t* from) {
+
+}
+
+AMF0Base::AMF0Type AMF0ReferenceData::getType()
+{
+
+}
+
+uint16_t AMF0ReferenceData::getValue()
+{
+
 }
 
 AMF0ECMAArrayData::AMF0ECMAArrayData() {
@@ -320,19 +384,28 @@ AMF0ECMAArrayData::AMF0ECMAArrayData() {
 AMF0ECMAArrayData::~AMF0ECMAArrayData() {
 }
 
-ssize_t AMF0ECMAArrayData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0ECMAArrayData::serialize(void* ctx, MediaStream* stream) {
 }
 
-ssize_t AMF0ECMAArrayData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0ECMAArrayData::serialize(void* ctx, uint8_t* into) {
 }
 
-AMF0::AMF0Type AMF0ECMAArrayData::getType() {
+ssize_t AMF0ECMAArrayData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-const AMF0* AMF0ECMAArrayData::getValue() {
+ssize_t AMF0ECMAArrayData::deserialize(void* ctx, const uint8_t* from) {
 }
+
+AMF0Base::AMF0Type AMF0ECMAArrayData::getType()
+{
+
+}
+
+const AMF0* AMF0ECMAArrayData::getValue()
+{
+
+}
+
 
 AMF0StrictArrayData::AMF0StrictArrayData() {
 }
@@ -340,18 +413,26 @@ AMF0StrictArrayData::AMF0StrictArrayData() {
 AMF0StrictArrayData::~AMF0StrictArrayData() {
 }
 
-ssize_t AMF0StrictArrayData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0StrictArrayData::serialize(void* ctx, MediaStream* stream) {
 }
 
-ssize_t AMF0StrictArrayData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0StrictArrayData::serialize(void* ctx, uint8_t* into) {
 }
 
-AMF0::AMF0Type AMF0StrictArrayData::getType() {
+ssize_t AMF0StrictArrayData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-const AMF0* AMF0StrictArrayData::getValue() {
+ssize_t AMF0StrictArrayData::deserialize(void* ctx, const uint8_t* from) {
+}
+
+AMF0Base::AMF0Type AMF0StrictArrayData::getType()
+{
+
+}
+
+const AMF0* AMF0StrictArrayData::getValue()
+{
+
 }
 
 AMF0DateData::AMF0DateData() {
@@ -360,18 +441,26 @@ AMF0DateData::AMF0DateData() {
 AMF0DateData::~AMF0DateData() {
 }
 
-ssize_t AMF0DateData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0DateData::serialize(void* ctx, MediaStream* stream) {
 }
 
-ssize_t AMF0DateData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0DateData::serialize(void* ctx, uint8_t* into) {
 }
 
-AMF0::AMF0Type AMF0DateData::getType() {
+ssize_t AMF0DateData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-time_t AMF0DateData::getValue() {
+ssize_t AMF0DateData::deserialize(void* ctx, const uint8_t* from) {
+}
+
+AMF0Base::AMF0Type AMF0DateData::getType()
+{
+
+}
+
+time_t AMF0DateData::getValue()
+{
+
 }
 
 AMF0LongStringData::AMF0LongStringData() {
@@ -380,18 +469,26 @@ AMF0LongStringData::AMF0LongStringData() {
 AMF0LongStringData::~AMF0LongStringData() {
 }
 
-ssize_t AMF0LongStringData::serialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0LongStringData::serialize(void* ctx, MediaStream* stream) {
 }
 
-ssize_t AMF0LongStringData::deserialize(MediaContext* ctx,
-		MediaStream* stream) {
+ssize_t AMF0LongStringData::serialize(void* ctx, uint8_t* into) {
 }
 
-AMF0::AMF0Type AMF0LongStringData::getType() {
+ssize_t AMF0LongStringData::deserialize(void* ctx, const MediaStream* stream) {
 }
 
-const std::string* AMF0LongStringData::getValue() {
+ssize_t AMF0LongStringData::deserialize(void* ctx, const uint8_t* from) {
+}
+
+AMF0Base::AMF0Type AMF0LongStringData::getType()
+{
+
+}
+
+const std::string* AMF0LongStringData::getValue()
+{
+
 }
 
 } /* namespace MediaPipe */

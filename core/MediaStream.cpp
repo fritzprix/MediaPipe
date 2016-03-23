@@ -17,14 +17,8 @@
 
 namespace MediaPipe {
 
-MediaContext::MediaContext(){ };
-MediaContext::~MediaContext(){ };
-
 MediaStream::MediaStream(void){ }
 MediaStream::~MediaStream(void){ }
-
-MediaStream::Serializable::Serializable() { };
-MediaStream::Serializable::~Serializable() { };
 
 
 MediaFileStream::MediaFileStream(const char* fname)
@@ -58,7 +52,7 @@ int MediaFileStream::close()
 	return ::close(fd);
 }
 
-ssize_t MediaFileStream::read(uint8_t* rb, size_t sz)
+ssize_t MediaFileStream::read(uint8_t* rb, size_t sz) const
 {
 	if(fd < 0)
 	{

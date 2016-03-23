@@ -14,6 +14,5 @@ int main(void)
 	MediaPipe::AMF0* amf0 = new MediaPipe::AMF0();
 	MediaPipe::AMF0BooleanData* bdata = new MediaPipe::AMF0BooleanData();
 	amf0->add(bdata);
-	MediaPipe::AMF0::AMF0Base* base = (MediaPipe::AMF0::AMF0Base*) bdata;
-//	base->serialize(NULL,NULL);
+	MediaPipe::AMF0Base* base = (MediaPipe::AMF0Base*) bdata;
 }

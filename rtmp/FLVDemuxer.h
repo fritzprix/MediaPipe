@@ -16,21 +16,21 @@ namespace MediaPipe {
 
 class FLVDemuxer {
 public:
-	class FLVTagHandler {
+	class FLVPayloadEventHandler : public PayloadEventHandler<FLVTag>{
 	public:
-		FLVTagHandler(){};
-		virtual ~FLVTagHandler() {};
-		virtual void onTagHandle(FLVTag* flvTag, FLVPayload* payload) = 0;
+		FLVPayloadEventHandler(){};
+		virtual ~FLVPayloadEventHandler() {};
+		void onPayload(const Payload<FLVTag>* payload, const MediaStream* stream);
+		void onPayload(const Payload<FLVTag>* payload, const uint8_t* buffer);
 	};
 	FLVDemuxer(MediaStream* input_stream);
 	virtual ~FLVDemuxer();
-	int setFLVTagHandler(FLVTag::TagType tagType, FLVTagHandler* handler);
-	void parse(size_t vb_sz = (1 << 20), size_t ab_sz = (1 << 12));
+	int setFLVPayloadEventHandler(FLVTag::TagType tagType,PayloadEventHandler<FLVTag>* handler);
+	void parse();
 private:
-	FLVTagHandler* video_handler;
-	FLVTagHandler* audio_handler;
-	FLVTagHandler* script_handler;
-
+	FLVPayloadEventHandler* videoPayloadHandler;
+	FLVPayloadEventHandler* audioPayloadHandler;
+	FLVPayloadEventHandler* scriptPayloadHandler;
 	const MediaStream* input_stream;
 };
 
