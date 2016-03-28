@@ -13,11 +13,12 @@
 #include <stdint.h>
 #include "mpipe.h"
 #include "core/MediaStream.h"
+#include "core/Serialize.h"
 #include "cdsl_slist.h"
 
 namespace MediaPipe {
 
-class AMF0Base : MediaStream::Serializable<void> ,slistNode_t{
+class AMF0Base : Serializable<void> ,slistNode_t{
 	friend class AMF0;
 public:
 	typedef enum {
@@ -41,7 +42,7 @@ public:
 	virtual AMF0Type getType() = 0;
 };
 
-class AMF0 : MediaStream::Serializable<void>, Iterable<AMF0Base>, slistEntry_t {
+class AMF0 : Serializable<void>, Iterable<AMF0Base>, slistEntry_t {
 public:
 	template <class T>
 	class AMF0Data : public AMF0Base {

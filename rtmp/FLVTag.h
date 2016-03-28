@@ -12,11 +12,12 @@
 #include <stdint.h>
 
 #include "core/MediaStream.h"
+#include "core/Serialize.h"
 #include "AMF0.h"
 
 namespace MediaPipe {
 
-class FLVTag : MediaStream::Serializable<void>, public Unpackable<FLVTag> , public Packable<FLVTag> {
+class FLVTag : Serializable<void>, public Unpackable<FLVTag> , public Packable<FLVTag> {
 public:
 	FLVTag();
 	virtual ~FLVTag();

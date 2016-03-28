@@ -1,4 +1,9 @@
 {
+	"STREAM" : {
+		"type":"bool",
+		"default":"y",
+		"force":"y"
+	},
 	"CORE_RECIPE" : {
 		"type":"recipe",
 		"path":"recipe.mk"
@@ -6,5 +11,9 @@
 	"CORE_DEPEND" : {
 		"type":"config",
 		"path":"./depend/config.json"
+	},
+	"STREAM_CONFIG" : {
+		"type":"config",
+		"path":"./stream/config.json"
 	}
 }

@@ -9,7 +9,8 @@
 	},
 	"CORE" : {
 		"type":"bool",
-		"default":"y"
+		"default":"y",
+		"force":"y"
 	},
 	"RTMP_CONFIG" : {
 		"type":"config",
@@ -18,10 +19,6 @@
 	"CORE_CONFIG" : {
 		"type":"config",
 		"path":"./core/config.json"
-	},
-	"UNIT_TEST" : {
-		"type":"string",
-		"default":"rtmp_upstream"
 	},
 	"UNIT_TEST_CONFIG" : {
 		"type":"config",

@@ -1,6 +1,6 @@
 {
-	"TEST_SCENARIO_CONFIG":{
-		"type":"config",
-		"path":"./$UNIT_TEST/config.json"
+	"STREAM_TEST_RECIPE":{
+		"type":"recipe",
+		"path":"recipe.mk"
 	}
 }

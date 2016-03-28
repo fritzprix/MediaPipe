@@ -1,5 +1,5 @@
 {
-	"RTMP_USTREAM_RECIPE":{
+	"STREAM_RECIPE" : {
 		"type":"recipe",
 		"path":"recipe.mk"
 	}

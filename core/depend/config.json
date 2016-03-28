@@ -1,5 +1,5 @@
 {
-	"CDSL_REP":{
+	"DEP_CDSL":{
 	   "type" : "repo",
 	   "name" : "cdsl",
 	   "url" : "https://github.com/fritzprix/cdsl.git",
