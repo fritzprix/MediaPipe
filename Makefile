@@ -3,7 +3,7 @@
 -include version.mk
 
 # set build utilities 
-CXX := clang++-3.6
+CXX := g++
 AR := ar
 MKDIR := mkdir
 PY:=python
@@ -12,7 +12,7 @@ TOOL_DIR:=./tools
 CONFIG_PY:= ./tools/jconfigpy/jconfigpy.py
 
 LIB_DIR=$(LDIR-y:%=-L%)
-LIB=$(SLIB-y:%=-l:%)
+LIB=$(SLIB-y:%=-l:%) -lpthread
 
 # Dev build library object
 DBG_STATIC_TARGET=libmpiped.a
@@ -27,15 +27,15 @@ CONFIG_TARGET:=./.config
 CONFIG_AUTOGEN=./$(AUTOGEN_DIR)/autogen.h
 
 # Unit Testing Target
-DBG_UT_TARGET=mpipe_test_v$(VER_MAJOR).$(VER_MINOR)
-REL_UT_TARGET=mpipe_test_v$(ver_MAJOR).$(VER_MINOR)
+DBG_UT_TARGET=mpipe_testd_v$(VER_MAJOR).$(VER_MINOR)
+REL_UT_TARGET=mpipe_testr_v$(VER_MAJOR).$(VER_MINOR)
 
 # C++ Flags for release build
-REL_CXXFLAGS :=	-O2 -g -Wall -fmessage-length=0
+REL_CXXFLAGS :=	-O2 -g -Wall -fmessage-length=0 -pthread
 
 # C++ Flags for Dev build (Note : __DBG Macro can be used to detect build context)
-DBG_CXXFLAGS :=  -O0 -g3 -Wall -fmessage-length=0 -D__DBG
-DYN_FLAGS := -shared -fPIC
+DBG_CXXFLAGS :=  -O0 -g3 -Wall -fmessage-length=0 -D__DBG -pthread
+DYN_FLAGS := -fPIC
  
 AUTOGEN_DIR=autogen
 DBG_OBJ_CACHE=Debug
@@ -87,9 +87,9 @@ debug : $(DBG_OBJ_CACHE) $(DBG_STATIC_TARGET) $(DBG_DYNAMIC_TARGET)
 
 release :$(REL_OBJ_CACHE) $(REL_STATIC_TARGET) $(REL_DYNAMIC_TARGET)
 
-devtest : $(DBG_UT_TARGET)
+devtest : $(DBG_OBJ_CACHE) $(DBG_UT_TARGET)
 
-reltest : $(REL_UT_TARGET)
+reltest : $(REL_OBJ_CACHE) $(REL_UT_TARGET)
 
 $(DBG_UT_TARGET) : $(DBG_OBJS) $(DBG_UT_OBJS) 
 	@echo "Build unit test target...$@"
@@ -101,7 +101,7 @@ $(DBG_STATIC_TARGET): $(DBG_OBJS)
 	
 $(DBG_DYNAMIC_TARGET): $(DBG_SH_OBJS)
 	@echo "Build so target...$@"
-	$(CXX) -o $@ $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_SH_OBJS) 
+	$(CXX) -o $@  -shared $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_SH_OBJS) 
 
 $(REL_UT_TARGET) : $(REL_OBJS) $(REL_UT_OBJS)
 	@echo "Build unit test target...$@"
@@ -113,7 +113,7 @@ $(REL_STATIC_TARGET): $(REL_OBJS)
 	
 $(REL_DYNAMIC_TARGET): $(REL_SH_OBJS)
 	@echo "Build so target...$@"
-	$(CXX) -o $@ $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_SH_OBJS) 
+	$(CXX) -o $@ -shared $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_SH_OBJS) 
 	
 $(CONFIG_PY):
 	@echo "Installing jconfigpy into $(TOOL_DIR)"

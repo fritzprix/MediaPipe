@@ -22,6 +22,8 @@ public:
 private:
 	MediaClientSocketStream* client;
 	MediaServerSocketStream* server;
+	pthread_t client_thread;
+	pthread_t server_thread;
 };
 
 } /* namespace MediaPipe */

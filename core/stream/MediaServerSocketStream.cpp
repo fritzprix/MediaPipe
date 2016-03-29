@@ -30,37 +30,37 @@ struct client_session {
 namespace MediaPipe {
 
 MediaServerSocketStream::MediaServerSocketStream(const char* host, int port) {
-	sock_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	client_fd = -1;
 	if(sock_fd < 0) {
-		::perror("fail to create socket !!\n");
-		::exit(EXIT_FAILURE);
+		perror("fail to create socket !!\n");
+		exit(EXIT_FAILURE);
 	}
-	struct hostent* resolved_host = ::gethostbyname(host);
+	struct hostent* resolved_host = gethostbyname(host);
 	if(resolved_host == NULL) {
-		::fprintf(stderr, "fail to resolve hostname : %s!!\n", host);
-		::exit(EXIT_FAILURE);
+		fprintf(stderr, "fail to resolve hostname : %s!!\n", host);
+		exit(EXIT_FAILURE);
 	}
 
 	memset(&host_addr, 0, sizeof(host_addr));
 	host_addr.sin_family = AF_INET;
-	host_addr.sin_port = ::htons(port);
+	host_addr.sin_port = htons(port);
 	memcpy(&host_addr.sin_addr, resolved_host->h_addr, sizeof(host_addr.sin_addr));
 	cdsl_nrbtreeRootInit(this);
 }
 
 MediaServerSocketStream::MediaServerSocketStream(int port) {
-	sock_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	client_fd = -1;
 	if(sock_fd < 0) {
-		::perror("fail to create socket !!\n");
-		::exit(EXIT_FAILURE);
+		perror("fail to create socket !!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	memset(&host_addr, 0, sizeof(host_addr));
 	host_addr.sin_family = AF_INET;
-	host_addr.sin_port = ::htons(port);
-	host_addr.sin_addr.s_addr = ::htonl(INADDR_ANY);
+	host_addr.sin_port = htons(port);
+	host_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	cdsl_nrbtreeRootInit(this);
 }
 
@@ -73,12 +73,12 @@ MediaServerSocketStream::~MediaServerSocketStream() {
 int MediaServerSocketStream::open(void) {
 	socklen_t sl = sizeof(sockaddr_in);
 	sockaddr_in client_addr;
-	if(	::bind(sock_fd, (sockaddr*) &host_addr, sl) < 0 )
+	if(	bind(sock_fd, (sockaddr*) &host_addr, sl) < 0 )
 	{
 		fprintf(stderr, "fail to bind server socket !! /w errcode : %d\n", errno);
 		return errno;
 	}
-	if(::listen(sock_fd, 0) < 0)
+	if(listen(sock_fd, 0) < 0)
 	{
 		fprintf(stderr, "unexpected error in listen !! /w errcode : %d\n", errno);
 		return errno;
@@ -94,13 +94,13 @@ int MediaServerSocketStream::open(void) {
 ssize_t MediaServerSocketStream::read(uint8_t* rb, size_t sz) const {
 	if(client_fd < 0)
 		return -1;
-	return ::recv(client_fd, rb, sz,0);
+	return recv(client_fd, rb, sz,0);
 }
 
 ssize_t MediaServerSocketStream::write(const uint8_t* wb, size_t sz) {
 	if(client_fd < 0)
 		return -1;
-	return ::send(client_fd, wb, sz,0);
+	return send(client_fd, wb, sz,0);
 }
 
 int MediaServerSocketStream::close() {

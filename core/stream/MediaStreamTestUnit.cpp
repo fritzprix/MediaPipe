@@ -9,11 +9,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static void* server_routine(void* arg);
+static void* client_routine(void* arg);
+
 namespace MediaPipe {
+
 
 MediaStreamTestUnit::MediaStreamTestUnit() {
 	client = new MediaClientSocketStream(3030);
 	server = new MediaServerSocketStream(3030);
+	server_thread = {0};
+	client_thread = {0};
 }
 
 MediaStreamTestUnit::~MediaStreamTestUnit() {
@@ -22,14 +28,37 @@ MediaStreamTestUnit::~MediaStreamTestUnit() {
 }
 
 bool MediaStreamTestUnit::performTest() {
-	uint8_t server_msg[100];
-	uint8_t client_msg[100];
-	server->open();
-	client->open();
-//	client->write((const uint8_t*) client_msg, ::sprintf((char*) client_msg,"Hello Server! %d\n",0));
-//	ssize_t rsz = server->read(server_msg,100);
-//	::printf("rsz : %d\n",rsz);
-	client->close();
+	pthread_create(&server_thread,NULL,server_routine,server);
+	pthread_create(&client_thread,NULL,client_routine,client);
+
+
+	pthread_join(server_thread,NULL);
+	pthread_join(client_thread,NULL);
 }
 
 } /* namespace MediaPipe */
+
+
+static void* server_routine(void* arg)
+{
+	uint8_t msg_buffer[100];
+	MediaPipe::MediaServerSocketStream* server = (MediaPipe::MediaServerSocketStream*) arg;
+	server->open();
+	ssize_t rsz = server->read(msg_buffer,100);
+	printf("I got a msg :  (%s) from client\n",msg_buffer);
+	server->write(msg_buffer,sprintf((char*) msg_buffer,"Hello Client !!\0"));
+	server->close();
+	return arg;
+}
+
+static void* client_routine(void* arg)
+{
+	uint8_t msg_buffer[100];
+	MediaPipe::MediaClientSocketStream* client = (MediaPipe::MediaClientSocketStream*) arg;
+	client->open();
+	client->write((const uint8_t*) msg_buffer, sprintf((char*) msg_buffer,"Hello Server !!\0"));
+	ssize_t rsz = client->read(msg_buffer,100);
+	printf("I got a msg : (%s) from server\n",msg_buffer);
+	client->close();
+	return arg;
+}

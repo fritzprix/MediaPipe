@@ -5,7 +5,7 @@
  *      Author: innocentevil
  */
 
-#include "core/stream/MediaStreamTestUnit.h"
+#include "MediaStreamTestUnit.h"
 
 using namespace MediaPipe;
 
