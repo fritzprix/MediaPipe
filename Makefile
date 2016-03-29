@@ -45,8 +45,14 @@ REL_OBJ_CACHE=Release
 DBG_OBJS = $(OBJ-y:%=$(DBG_OBJ_CACHE)/%.do)
 REL_OBJS = $(OBJ-y:%=$(REL_OBJ_CACHE)/%.o)
 
+DBG_SH_OBJS=$(OBJ-y:%=$(DBG_OBJ_CACHE)/%.s.do)
+REL_SH_OBJS=$(OBJ-y:%=$(REL_OBJ_CACHE)/%.s.o)
+
+DBG_UT_OBJS = $(OBJ-UT:%=$(DBG_OBJ_CACHE)/%.do)
+REL_UT_OBJS = $(OBJ-UT:%=$(REL_OBJ_CACHE)/%.o)
+
 .PHONY = $(PHONY)
-#.SILENT : $(SILENT)
+.SILENT : $(SILENT)
 
 PHONY= all clean debug release utest
 
@@ -85,29 +91,29 @@ devtest : $(DBG_UT_TARGET)
 
 reltest : $(REL_UT_TARGET)
 
-$(DBG_UT_TARGET) : $(DBG_OBJS)
+$(DBG_UT_TARGET) : $(DBG_OBJS) $(DBG_UT_OBJS) 
 	@echo "Build unit test target...$@"
-	$(CXX) -o $@ $(DBG_OBJS) $(INC) $(LIB_DIR) $(LIB)
+	$(CXX) -o $@ $(DBG_OBJS) $(DBG_UT_OBJS) $(INC) $(LIB_DIR) $(LIB) 
 
 $(DBG_STATIC_TARGET): $(DBG_OBJS)
 	@echo "Build static archive...$@"
 	$(AR) rcs -o $@ $(DBG_OBJS)
 	
-$(DBG_DYNAMIC_TARGET): $(DBG_OBJS)
+$(DBG_DYNAMIC_TARGET): $(DBG_SH_OBJS)
 	@echo "Build so target...$@"
-	$(CXX) -o $@ $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_OBJS) $(LIB_DIR) $(LIB)
+	$(CXX) -o $@ $(DBG_CXXFLAGS) $(DYN_FLAGS) $(DBG_SH_OBJS) 
 
-$(REL_UT_TARGET) : $(REL_OBJS)
+$(REL_UT_TARGET) : $(REL_OBJS) $(REL_UT_OBJS)
 	@echo "Build unit test target...$@"
-	$(CXX) -o $@ $(REL_OBJS) $(INC) $(LIB_DIR) $(LIB)
+	$(CXX) -o $@ $(REL_OBJS) $(REL_UT_OBJS) $(INC) $(LIB_DIR) $(LIB)
 	
 $(REL_STATIC_TARGET): $(REL_OBJS)
 	@echo "Build static archive...$@"
 	$(AR) rcs -o $@ $(REL_OBJS)
 	
-$(REL_DYNAMIC_TARGET): $(REL_OBJS)
+$(REL_DYNAMIC_TARGET): $(REL_SH_OBJS)
 	@echo "Build so target...$@"
-	$(CXX) -o $@ $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_OBJS) $(LIB_DIR) $(LIB)
+	$(CXX) -o $@ $(REL_CXXFLAGS) $(DYN_FLAGS) $(REL_SH_OBJS) 
 	
 $(CONFIG_PY):
 	@echo "Installing jconfigpy into $(TOOL_DIR)"
@@ -116,9 +122,17 @@ $(CONFIG_PY):
 
 $(DBG_OBJ_CACHE)/%.do:%.cpp
 	@echo "Compile... $@"
-	$(CXX) -c -o $@ $(DYN_FLAGS) $(DBG_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
+	$(CXX) -c -o $@ $(DBG_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
 	
 $(REL_OBJ_CACHE)/%.o:%.cpp
+	@echo "Compile... $@"
+	$(CXX) -c -o $@ $(REL_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
+	
+$(DBG_OBJ_CACHE)/%.s.do:%.cpp
+	@echo "Compile... $@"
+	$(CXX) -c -o $@ $(DYN_FLAGS) $(DBG_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
+	
+$(REL_OBJ_CACHE)/%.s.o:%.cpp
 	@echo "Compile... $@"
 	$(CXX) -c -o $@ $(DYN_FLAGS) $(REL_CXXFLAGS) $(INC) $< $(LIB_DIR) $(LIB)
 

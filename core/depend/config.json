@@ -5,6 +5,12 @@
 	   "url" : "https://github.com/fritzprix/cdsl.git",
 	   "out" : "./dep/"
 	},
+	"DEP_NC":{
+		"type":"repo",
+		"name":"nc",
+		"url":"https://github.com/MediaPipe/NetworkCoding.git",
+		"out" :"./dep/"
+	},
 	"DEP_AUTORECIPE":{
 		"type":"recipe",
 		"path":"autorecipe.mk"
