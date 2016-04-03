@@ -59,6 +59,8 @@ public:
 		bool hasNext();
 		AMF0Base* next();
 		void remove();
+	private:
+		bool is_mutable;
 	};
 
 	/**
@@ -82,6 +84,7 @@ public:
 
 	int add(AMF0Base* obj);
 	void remove(AMF0Base* obj);
+	void clear();
 	void setMutable(bool is_mutable);
 	int length(void);
 private:
