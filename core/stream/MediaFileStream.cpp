@@ -38,10 +38,20 @@ int MediaFileStream::open(void) {
 
 ssize_t MediaFileStream::read(uint8_t* rb, size_t sz) const {
 	if(fd < 0) {
-		::perror("illegal state : file not opened !! \n");
-		::exit(-1);
+		perror("illegal state : file not opened !! \n");
+		exit(-1);
 	}
 	return ::read(fd, rb, sz);
+}
+
+char MediaFileStream::read() const {
+	if(fd < 0) {
+		perror("illegal state : file not opened !! \n");
+		exit(-1);
+	}
+	char c = 0;
+	::read(fd, &c, sizeof(char));
+	return c;
 }
 
 ssize_t MediaFileStream::write(const uint8_t* wb, size_t sz) {
@@ -50,6 +60,14 @@ ssize_t MediaFileStream::write(const uint8_t* wb, size_t sz) {
 		::exit(-1);
 	}
 	return ::write(fd, wb, sz);
+}
+
+int MediaFileStream::write(const char c) {
+	if(fd < 0) {
+		::perror("illegal state : file not opened !! \n");
+		::exit(-1);
+	}
+	return ::write(fd, &c, sizeof(char));
 }
 
 int MediaFileStream::close() {

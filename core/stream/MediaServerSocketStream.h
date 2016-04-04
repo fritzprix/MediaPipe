@@ -26,7 +26,9 @@ public:
 
 	int open(void);
 	ssize_t read(uint8_t* rb, size_t sz) const;
+	char read() const;
 	ssize_t write(const uint8_t* wb, size_t sz);
+	int write(const char);
 	int close();
 private:
 	int sock_fd;

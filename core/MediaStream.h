@@ -26,7 +26,9 @@ public:
 
 	virtual int open(void) = 0;
 	virtual ssize_t read(uint8_t* rb, size_t sz) const = 0;
+	virtual char read() const = 0;
 	virtual ssize_t write(const uint8_t* wb, size_t sz) = 0;
+	virtual int write(const char ) = 0;;
 	virtual int close() = 0;
 };
 

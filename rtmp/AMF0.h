@@ -129,6 +129,8 @@ public:
 	ssize_t deserialize(void* ctx, const uint8_t* from);
 	AMF0Base::AMF0Type getType();
 	const std::string* getValue();
+private:
+	std::string val;
 };
 
 class AMF0ObjectData : public AMF0::AMF0Data<const AMF0*> {

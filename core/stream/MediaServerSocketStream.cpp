@@ -92,15 +92,38 @@ int MediaServerSocketStream::open(void) {
 }
 
 ssize_t MediaServerSocketStream::read(uint8_t* rb, size_t sz) const {
-	if(client_fd < 0)
-		return -1;
+	if(client_fd < 0) {
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
+	}
 	return recv(client_fd, rb, sz,0);
 }
 
+char MediaServerSocketStream::read() const {
+	if(client_fd < 0) {
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
+	}
+	char c = 0;
+	recv(sock_fd,&c,sizeof(char),0);
+	return c;
+}
+
 ssize_t MediaServerSocketStream::write(const uint8_t* wb, size_t sz) {
-	if(client_fd < 0)
-		return -1;
+	if(client_fd < 0) {
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
+	}
+
 	return send(client_fd, wb, sz,0);
+}
+
+int MediaServerSocketStream::write(const char c) {
+	if(client_fd < 0) {
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
+	}
+	return send(sock_fd, &c, sizeof(char),0);
 }
 
 int MediaServerSocketStream::close() {

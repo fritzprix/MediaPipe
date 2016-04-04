@@ -12,6 +12,7 @@
 #include "FLVTag.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <stddef.h>
 
 typedef struct {
@@ -340,85 +341,177 @@ AMF0NumberData::~AMF0NumberData()
 
 ssize_t AMF0NumberData::serialize(void* ctx, MediaStream* stream)
 {
+	if(!stream)
+		return -1;
+	amf0_val obj;
+	obj.marker = (uint8_t) AMF0Base::NUMBER;
+	obj.numv = val;
+	return stream->write((uint8_t*) &obj, offsetof(amf0_val, numv) + sizeof(obj.numv));
 }
 
 ssize_t AMF0NumberData::serialize(void* ctx, uint8_t* into) {
+	if(!into)
+		return -1;
+
+	amf0_val obj;
+	obj.marker = (uint8_t) AMF0Base::NUMBER;
+	obj.numv = val;
+	size_t wsz = offsetof(amf0_val, numv) + sizeof(obj.numv);
+	memcpy(into, &obj, wsz);
+	return wsz;
 }
 
 ssize_t AMF0NumberData::deserialize(void* ctx, const MediaStream* stream) {
+	if(!stream)
+		return -1;
+	return stream->read((uint8_t*) &val,sizeof(double));
 }
 
 
 ssize_t AMF0NumberData::deserialize(void* ctx, const uint8_t* from) {
+	if(!from)
+		return -1;
+	size_t sz = sizeof(double);
+	memcpy(&val,from,sz);
+	return sz;
 }
 
 AMF0Base::AMF0Type AMF0NumberData::getType()
 {
-
+	return AMF0Base::NUMBER;
 }
 
 double AMF0NumberData::getValue()
 {
-
+	return val;
 }
 
 AMF0BooleanData::AMF0BooleanData()
 {
-
+	val = false;
 }
 
 AMF0BooleanData::~AMF0BooleanData() {
 }
 
 ssize_t AMF0BooleanData::serialize(void* ctx, MediaStream* stream) {
+	if(!stream)
+		return -1;
+	amf0_val obj;
+	obj.boolv = val;
+	obj.marker = (uint8_t) AMF0Base::BOOLEAN;
+	return stream->write((uint8_t*) &obj, offsetof(amf0_val, boolv) + sizeof(obj.boolv));
 }
 
 ssize_t AMF0BooleanData::serialize(void* ctx, uint8_t* into) {
+	if(!into)
+		return -1;
+
+	amf0_val obj;
+	obj.boolv = val;
+	obj.marker = (uint8_t) AMF0Base::BOOLEAN;
+	size_t sz = offsetof(amf0_val, boolv) + sizeof(obj.boolv);
+	memcpy(into, &obj, sz);
+	return sz;
 }
 
 ssize_t AMF0BooleanData::deserialize(void* ctx, const MediaStream* stream) {
+	if(!stream)
+		return -1;
+	uint8_t v;
+	stream->read((uint8_t*) &v, sizeof(uint8_t));
+	val = v == 1? true : false;
+	return sizeof(uint8_t);
 }
 
 ssize_t AMF0BooleanData::deserialize(void* ctx, const uint8_t* from) {
+	if(!from)
+		return -1;
+	val = *from == 1? true : false;
+	return sizeof(uint8_t);
 }
 
 AMF0Base::AMF0Type AMF0BooleanData::getType()
 {
-
+	return AMF0Base::BOOLEAN;
 }
 
 bool AMF0BooleanData::getValue()
 {
-
+	return val;
 }
 
 
 AMF0StringData::AMF0StringData() {
+	val.clear();
 }
 
 AMF0StringData::~AMF0StringData() {
 }
 
 ssize_t AMF0StringData::serialize(void* ctx, MediaStream* stream) {
+	if(!stream)
+		return -1;
+	amf0_val obj;
+	size_t sz;
+	obj.marker = (uint8_t) AMF0Base::STRING;
+	obj.strv.len = val.length();
+	sz = stream->write((uint8_t*) &obj,offsetof(amf0_val, strv.len) + sizeof(obj.strv.len));
+	sz += stream->write((uint8_t*)val.c_str(), obj.strv.len);
+	return sz;
 }
 
 ssize_t AMF0StringData::serialize(void* ctx, uint8_t* into) {
+	if(!into)
+		return -1;
+	amf0_val obj;
+	obj.marker = (uint8_t) AMF0Base::STRING;
+	obj.strv.len = val.length();
+	size_t sz = offsetof(amf0_val, strv.len) + sizeof(obj.strv.len);
+	memcpy(into, &obj, sz);
+	memcpy(into, val.c_str(), obj.strv.len);
+	return sz + obj.strv.len;
 }
 
 ssize_t AMF0StringData::deserialize(void* ctx, const MediaStream* stream) {
+	if(!stream)
+		return -1;
+	amf0_val obj;
+	size_t sz;
+	sz = stream->read((uint8_t*) &obj.strv.len,sizeof(obj.strv.len));
+	// TODO: have to consider endianess difference between AMF0 and platform
+	sz += obj.strv.len;
+
+	val.resize(obj.strv.len);
+	while(obj.strv.len--){
+		val.push_back(stream->read());
+	}
+	return sz;
 }
 
 ssize_t AMF0StringData::deserialize(void* ctx, const uint8_t* from) {
+	if(!from)
+		return -1;
+	amf0_val obj;
+	size_t sz = sizeof(obj.strv.len);
+	memcpy(&obj.strv.len, from, sizeof(obj.strv.len));
+
+	val.resize(obj.strv.len);
+	char* c = (char*) &from[sz];
+	sz += obj.strv.len;
+
+	while(obj.strv.len--){
+		val.push_back(*c++);
+	}
+	return sz;
 }
 
-AMF0Base::AMF0Type AMF0StringData::getType()
-{
-
+AMF0Base::AMF0Type AMF0StringData::getType() {
+	return AMF0Base::STRING;
 }
 
-const std::string* AMF0StringData::getValue()
-{
-
+const std::string* AMF0StringData::getValue() {
+	return &val;
 }
 
 AMF0ObjectData::AMF0ObjectData() {

@@ -77,24 +77,42 @@ int MediaClientSocketStream::open(void) {
 
 ssize_t MediaClientSocketStream::read(uint8_t* rb, size_t sz) const {
 	if(sock_fd < 0) {
-		perror("invalid state : socket is not initialized !!\n");
-		exit(EXIT_FAILURE);
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
 	}
-	recv(sock_fd, rb, sz,0);
+	return recv(sock_fd, rb, sz,0);
+}
+
+char MediaClientSocketStream::read() const {
+	if(sock_fd < 0) {
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
+	}
+	char c = 0;
+	recv(sock_fd,&c,sizeof(char),0);
+	return c;
 }
 
 ssize_t MediaClientSocketStream::write(const uint8_t* wb, size_t sz) {
 	if(sock_fd < 0) {
-		perror("invalid state : socket is not initialized !!\n");
-		exit(EXIT_FAILURE);
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
 	}
-	send(sock_fd, wb, sz, 0);
+	return send(sock_fd, wb, sz, 0);
+}
+
+int MediaClientSocketStream::write(const char c) {
+	if(sock_fd < 0) {
+		fprintf(stderr, "socket not opened !! \n");
+		exit(1);
+	}
+	return send(sock_fd, &c, sizeof(char),0);
 }
 
 int MediaClientSocketStream::close() {
 	if(sock_fd < 0)
 		return EXIT_FAILURE;
-	::close(sock_fd);
+	return ::close(sock_fd);
 }
 
 } /* namespace MediaPipe */
