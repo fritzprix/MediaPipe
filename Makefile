@@ -31,7 +31,7 @@ DBG_UT_TARGET=mpipe_testd_v$(VER_MAJOR).$(VER_MINOR)
 REL_UT_TARGET=mpipe_testr_v$(VER_MAJOR).$(VER_MINOR)
 
 # C++ Flags for release build
-REL_CXXFLAGS :=	-O2 -g -Wall -fmessage-length=0 -pthread
+REL_CXXFLAGS :=	-O2 -g -Wall -fmessage-length=0 -DNDEBUG -pthread
 
 # C++ Flags for Dev build (Note : __DBG Macro can be used to detect build context)
 DBG_CXXFLAGS :=  -O0 -g3 -Wall -fmessage-length=0 -D__DBG -pthread
