@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <assert.h>
 
 namespace MediaPipe {
 
@@ -24,60 +25,42 @@ MediaFileStream::~MediaFileStream() {
 }
 
 int MediaFileStream::open(void) {
-	if(fd >= 0) {
-		::perror("file has already opened !!\n");
-		return EXIT_FAILURE;
-	}
+	assert(!(fd >= 0));
 	fd = ::open(filename.c_str(), O_RDWR);
-	if(fd < 0) {
-		::perror("fail to open file !!\n");
-		::exit(-1);
-	}
+	assert(!(fd < 0));
 	return EXIT_SUCCESS;
 }
 
 ssize_t MediaFileStream::read(uint8_t* rb, size_t sz) const {
-	if(fd < 0) {
-		perror("illegal state : file not opened !! \n");
-		exit(-1);
-	}
+	assert(!(fd < 0));
 	return ::read(fd, rb, sz);
 }
 
 char MediaFileStream::read() const {
-	if(fd < 0) {
-		perror("illegal state : file not opened !! \n");
-		exit(-1);
-	}
+	assert(!(fd < 0));
 	char c = 0;
 	::read(fd, &c, sizeof(char));
 	return c;
 }
 
 ssize_t MediaFileStream::write(const uint8_t* wb, size_t sz) {
-	if(fd < 0) {
-		::perror("illegal state : file not opened !! \n");
-		::exit(-1);
-	}
+	assert(!(fd < 0));
 	return ::write(fd, wb, sz);
 }
 
 int MediaFileStream::write(const char c) {
-	if(fd < 0) {
-		::perror("illegal state : file not opened !! \n");
-		::exit(-1);
-	}
+	assert(!(fd < 0));
 	return ::write(fd, &c, sizeof(char));
 }
 
 int MediaFileStream::close() {
-	if(fd > 0) {
-		return ::close(fd);
-		fd = -1;
+	if(fd < 0){
+		return EXIT_FAILURE;
 	}
+	::close(fd);
+	fd = -1;
 	return EXIT_SUCCESS;
 }
-
 
 
 } /* namespace MediaPipe */

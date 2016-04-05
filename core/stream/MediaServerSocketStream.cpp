@@ -18,6 +18,7 @@
 #include <sys/epoll.h>
 #include <cdsl_nrbtree.h>
 #include <unistd.h>
+#include <assert.h>
 
 
 
@@ -31,16 +32,10 @@ namespace MediaPipe {
 
 MediaServerSocketStream::MediaServerSocketStream(const char* host, int port) {
 	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+	assert(!(sock_fd < 0));
 	client_fd = -1;
-	if(sock_fd < 0) {
-		perror("fail to create socket !!\n");
-		exit(EXIT_FAILURE);
-	}
 	struct hostent* resolved_host = gethostbyname(host);
-	if(resolved_host == NULL) {
-		fprintf(stderr, "fail to resolve hostname : %s!!\n", host);
-		exit(EXIT_FAILURE);
-	}
+	assert(resolved_host);
 
 	memset(&host_addr, 0, sizeof(host_addr));
 	host_addr.sin_family = AF_INET;
@@ -51,11 +46,8 @@ MediaServerSocketStream::MediaServerSocketStream(const char* host, int port) {
 
 MediaServerSocketStream::MediaServerSocketStream(int port) {
 	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+	assert(!(sock_fd < 0));
 	client_fd = -1;
-	if(sock_fd < 0) {
-		perror("fail to create socket !!\n");
-		exit(EXIT_FAILURE);
-	}
 
 	memset(&host_addr, 0, sizeof(host_addr));
 	host_addr.sin_family = AF_INET;
@@ -73,63 +65,47 @@ MediaServerSocketStream::~MediaServerSocketStream() {
 int MediaServerSocketStream::open(void) {
 	socklen_t sl = sizeof(sockaddr_in);
 	sockaddr_in client_addr;
-	if(	bind(sock_fd, (sockaddr*) &host_addr, sl) < 0 )
-	{
-		fprintf(stderr, "fail to bind server socket !! /w errcode : %d\n", errno);
-		return errno;
-	}
-	if(listen(sock_fd, 0) < 0)
-	{
-		fprintf(stderr, "unexpected error in listen !! /w errcode : %d\n", errno);
-		return errno;
-	}
-	if((client_fd = accept(sock_fd,(sockaddr*) &client_addr,&sl)) < 0)
-	{
-		fprintf(stderr, "fail to connect client !! /w errcode :%d\n", errno);
-		return errno;
-	}
+	int res;
+	res = bind(sock_fd, (sockaddr*) &host_addr, sl);
+	assert(!(res < 0));
+	res = listen(sock_fd,0);
+	assert(!(res < 0));
+	client_fd = accept(sock_fd, (sockaddr*) &client_addr,&sl);
+	assert(!(client_fd < 0));
 	return EXIT_SUCCESS;
 }
 
 ssize_t MediaServerSocketStream::read(uint8_t* rb, size_t sz) const {
-	if(client_fd < 0) {
-		fprintf(stderr, "socket not opened !! \n");
-		exit(1);
-	}
+	assert(!(client_fd < 0));
 	return recv(client_fd, rb, sz,0);
 }
 
 char MediaServerSocketStream::read() const {
-	if(client_fd < 0) {
-		fprintf(stderr, "socket not opened !! \n");
-		exit(1);
-	}
+	assert(!(client_fd < 0));
 	char c = 0;
 	recv(sock_fd,&c,sizeof(char),0);
 	return c;
 }
 
 ssize_t MediaServerSocketStream::write(const uint8_t* wb, size_t sz) {
-	if(client_fd < 0) {
-		fprintf(stderr, "socket not opened !! \n");
-		exit(1);
-	}
-
+	assert(!(client_fd < 0));
 	return send(client_fd, wb, sz,0);
 }
 
 int MediaServerSocketStream::write(const char c) {
-	if(client_fd < 0) {
-		fprintf(stderr, "socket not opened !! \n");
-		exit(1);
-	}
+	assert(!(client_fd));
 	return send(sock_fd, &c, sizeof(char),0);
 }
 
 int MediaServerSocketStream::close() {
-	if(sock_fd < -1)
+	if(sock_fd < -1){
 		return EXIT_FAILURE;
-	return ::close(sock_fd);
+	}
+
+	::close(sock_fd);
+	sock_fd = -1;
+	client_fd = -1;
+	return EXIT_SUCCESS;
 }
 
 } /* namespace MediaPipe */
