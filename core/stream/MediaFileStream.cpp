@@ -31,26 +31,26 @@ int MediaFileStream::open(void) {
 	return EXIT_SUCCESS;
 }
 
-ssize_t MediaFileStream::read(uint8_t* rb, size_t sz) const {
+ssize_t MediaFileStream::read(void* rb, size_t sz) const {
 	assert(!(fd < 0));
 	return ::read(fd, rb, sz);
 }
 
-char MediaFileStream::read() const {
+uint8_t MediaFileStream::read() const {
 	assert(!(fd < 0));
-	char c = 0;
-	::read(fd, &c, sizeof(char));
+	uint8_t c = 0;
+	::read(fd, &c, sizeof(uint8_t));
 	return c;
 }
 
-ssize_t MediaFileStream::write(const uint8_t* wb, size_t sz) {
+ssize_t MediaFileStream::write(const void* wb, size_t sz) {
 	assert(!(fd < 0));
 	return ::write(fd, wb, sz);
 }
 
-int MediaFileStream::write(const char c) {
+ssize_t MediaFileStream::write(const uint8_t c) {
 	assert(!(fd < 0));
-	return ::write(fd, &c, sizeof(char));
+	return ::write(fd, &c, sizeof(uint8_t));
 }
 
 int MediaFileStream::close() {

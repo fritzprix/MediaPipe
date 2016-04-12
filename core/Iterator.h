@@ -1,14 +1,12 @@
 /*
- * mpipe.h
+ * Iterator.h
  *
- *  Created on: Mar 17, 2016
+ *  Created on: Apr 6, 2016
  *      Author: innocentevil
  */
 
-#ifndef MPIPE_H_
-#define MPIPE_H_
-
-
+#ifndef CORE_ITERATOR_H_
+#define CORE_ITERATOR_H_
 
 namespace MediaPipe {
 
@@ -17,9 +15,12 @@ class Iterator {
 public:
 	Iterator(){};
 	virtual ~Iterator() {};
+	virtual void reset() = 0;
 	virtual bool hasNext() = 0;
 	virtual T* next() = 0;
 	virtual void remove() = 0;
+	virtual bool lock() = 0;
+	virtual void unlock() = 0;
 };
 
 template <class T>
@@ -34,4 +35,5 @@ public:
 }
 
 
-#endif /* MPIPE_H_ */
+
+#endif /* CORE_ITERATOR_H_ */

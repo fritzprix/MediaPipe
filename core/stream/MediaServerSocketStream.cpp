@@ -75,26 +75,26 @@ int MediaServerSocketStream::open(void) {
 	return EXIT_SUCCESS;
 }
 
-ssize_t MediaServerSocketStream::read(uint8_t* rb, size_t sz) const {
+ssize_t MediaServerSocketStream::read(void* rb, size_t sz) const {
 	assert(!(client_fd < 0));
 	return recv(client_fd, rb, sz,0);
 }
 
-char MediaServerSocketStream::read() const {
+uint8_t MediaServerSocketStream::read() const {
 	assert(!(client_fd < 0));
-	char c = 0;
-	recv(sock_fd,&c,sizeof(char),0);
+	uint8_t c = 0;
+	recv(sock_fd,&c,sizeof(uint8_t),0);
 	return c;
 }
 
-ssize_t MediaServerSocketStream::write(const uint8_t* wb, size_t sz) {
+ssize_t MediaServerSocketStream::write(const void* wb, size_t sz) {
 	assert(!(client_fd < 0));
 	return send(client_fd, wb, sz,0);
 }
 
-int MediaServerSocketStream::write(const char c) {
+ssize_t MediaServerSocketStream::write(const uint8_t c) {
 	assert(!(client_fd));
-	return send(sock_fd, &c, sizeof(char),0);
+	return send(sock_fd, &c, sizeof(uint8_t),0);
 }
 
 int MediaServerSocketStream::close() {

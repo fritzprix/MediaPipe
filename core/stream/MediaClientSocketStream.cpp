@@ -62,26 +62,26 @@ int MediaClientSocketStream::open(void) {
 	return res;
 }
 
-ssize_t MediaClientSocketStream::read(uint8_t* rb, size_t sz) const {
+ssize_t MediaClientSocketStream::read(void* rb, size_t sz) const {
 	assert(!(sock_fd < 0));
 	return recv(sock_fd, rb, sz,0);
 }
 
-char MediaClientSocketStream::read() const {
+uint8_t MediaClientSocketStream::read() const {
 	assert(!(sock_fd < 0));
-	char c = 0;
-	recv(sock_fd,&c,sizeof(char),0);
+	uint8_t c = 0;
+	recv(sock_fd,&c,sizeof(uint8_t),0);
 	return c;
 }
 
-ssize_t MediaClientSocketStream::write(const uint8_t* wb, size_t sz) {
+ssize_t MediaClientSocketStream::write(const void* wb, size_t sz) {
 	assert(!(sock_fd < 0));
 	return send(sock_fd, wb, sz, 0);
 }
 
-int MediaClientSocketStream::write(const char c) {
+ssize_t MediaClientSocketStream::write(const uint8_t c) {
 	assert(!(sock_fd < 0));
-	return send(sock_fd, &c, sizeof(char),0);
+	return send(sock_fd, &c, sizeof(uint8_t),0);
 }
 
 int MediaClientSocketStream::close() {

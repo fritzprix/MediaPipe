@@ -7,13 +7,21 @@
 
 
 #include "cdsl_slist.h"
-#include "mpipe.h"
+#include "cdsl_dlist.h"
+#include "cdsl_hashtree.h"
+#include "Iterator.h"
 #include "AMF0.h"
 #include "FLVTag.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
+#include <assert.h>
+#include <iostream>
+#include <functional>
+#include <string>
+#include <map>
+
 
 typedef struct {
 	uint8_t _[3];
@@ -25,9 +33,10 @@ struct amf0_str {
 } __attribute__((packed));
 
 struct amf0_obj_prop {
-	amf0_str 		name;
-	uint8_t			amf0_v;
-} __attribute__((packed));
+	hashNode_t           node;
+	MediaPipe::AMF0Base* obj;
+	amf0_str		     key;
+}__attribute__((packed));
 
 struct amf0_obj_end {
 	uint24_t		end_marker;
@@ -66,10 +75,18 @@ struct amf0_val {
 		double numv;
 		uint8_t boolv;
 		struct amf0_str strv;
+		uint16_t ref;
+		uint32_t prop_cnt;
 	} __attribute__((packed));
 } __attribute__((packed));
 
+
+
+
 namespace MediaPipe {
+
+static AMF0Base* parse_amf0(void* ctx, const MediaStream* stream,size_t* sz);
+static AMF0Base* parse_amf0(void* ctx, const uint8_t* buffer, size_t* sz);
 
 AMF0Base::AMF0Base()
 {
@@ -81,20 +98,36 @@ AMF0Base::~AMF0Base()
 }
 
 
-AMF0::AMF0Iterator::AMF0Iterator(AMF0* iterable,bool is_mutable) {
+AMF0Iterable::AMF0Iterable() {
+	cdsl_slistEntryInit(this);
+}
+
+
+AMF0::AMF0Iterator::AMF0Iterator(AMF0Iterable* iterable,bool is_mutable) {
 	cdsl_slistIterInit(iterable,this);
 	this->is_mutable = is_mutable;
+	this->iterable = iterable;
+	pthread_mutexattr_t lock_attr;
+	pthread_mutexattr_init(&lock_attr);
+	pthread_mutexattr_settype(&lock_attr,PTHREAD_MUTEX_NORMAL);
+	pthread_mutex_init(&mtx_lock,&lock_attr);
 }
 
 AMF0::AMF0Iterator::~AMF0Iterator() {
 	/*
 	 * nothing to be cleaned
 	 */
+	pthread_mutex_destroy(&mtx_lock);
 }
 
 bool AMF0::AMF0Iterator::hasNext() {
 	return cdsl_iterHasNext(this);
 }
+
+void AMF0::AMF0Iterator::reset() {
+	cdsl_slistIterInit(iterable, this);
+}
+
 
 AMF0Base* AMF0::AMF0Iterator::next() {
 	return (AMF0Base*) cdsl_iterNext(this);
@@ -106,21 +139,19 @@ void AMF0::AMF0Iterator::remove() {
 	cdsl_iterRemove(this);
 }
 
-AMF0::AMF0(bool is_mutable)
+
+bool AMF0::AMF0Iterator::lock()
 {
-	/*
-	 * mutable means AMF0Base object can be added or removed by add / remove method
-	 * in this case AMF0Base should be freed outside of AMF0.
-	 */
-	cdsl_slistEntryInit(this);
-	this->is_mutable = is_mutable;
+	if(pthread_mutex_lock(&mtx_lock) == EXIT_SUCCESS)
+		return true;
+	return false;
 }
 
-AMF0::AMF0()
+void AMF0::AMF0Iterator::unlock()
 {
-	cdsl_slistEntryInit(this);
-	is_mutable = true;
+	pthread_mutex_unlock(&mtx_lock);
 }
+
 
 AMF0::~AMF0()
 {
@@ -171,126 +202,42 @@ ssize_t AMF0::deserialize(void* ctx, const uint8_t* from)
 		return -1;
 
 	FLVTag* flv_t = (FLVTag*) ctx;
-	AMF0Base::AMF0Type type;
 	AMF0Base *val = NULL;
 	size_t t_sz = flv_t->getSize();
 	size_t sz = 0;
-	uint8_t* cptr = (uint8_t*)from;
 	while(sz <= t_sz)
 	{
-		type = (AMF0Base::AMF0Type) *cptr;
-		sz++;
-		val = NULL;
-		switch(type) {
-		case AMF0Base::NUMBER:
-			val = new AMF0NumberData();
-			break;
-		case AMF0Base::BOOLEAN:
-			val = new AMF0BooleanData();
-			break;
-		case AMF0Base::STRING:
-			val = new AMF0StringData();
-			break;
-		case AMF0Base::OBJECT:
-			val = new AMF0ObjectData();
-			break;
-		case AMF0Base::REF:
-			val = new AMF0ReferenceData();
-			break;
-		case AMF0Base::ECMA_ARRAY:
-			val = new AMF0ECMAArrayData();
-			break;
-		case AMF0Base::OBJ_END:
-			break;
-		case AMF0Base::UND:
-			break;
-		case AMF0Base::NUL:
-			break;
-		case AMF0Base::MV_CLIP:
-			break;
-		case AMF0Base::STRICT_ARRAY:
-			val = new AMF0StrictArrayData();
-			break;
-		case AMF0Base::DATE:
-			val = new AMF0DateData();
-			break;
-		case AMF0Base::LSTRING:
-			val = new AMF0LongStringData();
-			break;
-		}
+		val = parse_amf0(ctx, (uint8_t*) &from[sz],&sz);
 		if(val) {
-			sz += val->deserialize(ctx, from);
 			cdsl_slistPutHead(this, val);
 		}
 	}
 	return sz;
 }
 
-
 ssize_t AMF0::deserialize(void* ctx, const MediaStream* stream)
 {
 	if(!stream)
 		return -1;
 	AMF0Base* val = NULL;
-	AMF0Base::AMF0Type type;
 	FLVTag* flv_t = (FLVTag*) ctx;
 	size_t t_sz = flv_t->getSize();
 	size_t sz = 0;
 	while(sz <= t_sz)
 	{
-		if(stream->read((uint8_t*) &type, sizeof(uint8_t)) < 0)
-			return sz;
-		sz++;
-		val = NULL;
-		switch(type){
-		case AMF0Base::NUMBER:
-			val = (AMF0Base*)  new AMF0NumberData();
-			break;
-		case AMF0Base::BOOLEAN:
-			val = (AMF0Base*) new AMF0BooleanData();
-			break;
-		case AMF0Base::STRING:
-			val = (AMF0Base*) new AMF0StringData();
-			break;
-		case AMF0Base::OBJECT:
-			val = (AMF0Base*) new AMF0ObjectData();
-			break;
-		case AMF0Base::REF:
-			val = (AMF0Base*) new AMF0ReferenceData();
-			break;
-		case AMF0Base::ECMA_ARRAY:
-			val = (AMF0Base*) new AMF0ECMAArrayData();
-			break;
-		case AMF0Base::OBJ_END:
-			// object end is not handled here
-			break;
-		case AMF0Base::UND:
-			break;
-		case AMF0Base::NUL:
-			break;
-		case AMF0Base::MV_CLIP:
-			break;
-		case AMF0Base::STRICT_ARRAY:
-			val = (AMF0Base*) new AMF0StrictArrayData();
-			break;
-		case AMF0Base::DATE:
-			val = (AMF0Base*) new AMF0DateData();
-			break;
-		case AMF0Base::LSTRING:
-			val = (AMF0Base*) new AMF0LongStringData();
-			break;
-		}
+		val = parse_amf0(ctx, stream,&sz);
 		if(val) {
-			sz += val->deserialize(ctx, stream);
 			cdsl_slistPutTail(this,val);
 		}
 	}
 	return sz;
 }
 
-
 Iterator<AMF0Base>* AMF0::iterator() {
-	return new AMF0Iterator(this,is_mutable);
+	if(!iter.lock())
+		return NULL;
+	iter.reset();
+	return &iter;
 }
 
 
@@ -314,7 +261,6 @@ void AMF0::clear() {
 		delete obj;
 	}
 }
-
 
 void AMF0::setMutable(bool is_mutable)
 {
@@ -479,9 +425,9 @@ ssize_t AMF0StringData::deserialize(void* ctx, const MediaStream* stream) {
 	amf0_val obj;
 	size_t sz;
 	sz = stream->read((uint8_t*) &obj.strv.len,sizeof(obj.strv.len));
-	// TODO: have to consider endianess difference between AMF0 and platform
+	if(obj.strv.len == 0)
+		return sz;
 	sz += obj.strv.len;
-
 	val.resize(obj.strv.len);
 	while(obj.strv.len--){
 		val.push_back(stream->read());
@@ -495,7 +441,8 @@ ssize_t AMF0StringData::deserialize(void* ctx, const uint8_t* from) {
 	amf0_val obj;
 	size_t sz = sizeof(obj.strv.len);
 	memcpy(&obj.strv.len, from, sizeof(obj.strv.len));
-
+	if(obj.strv.len == 0)
+		return sz;
 	val.resize(obj.strv.len);
 	char* c = (char*) &from[sz];
 	sz += obj.strv.len;
@@ -514,97 +461,401 @@ const std::string* AMF0StringData::getValue() {
 	return &val;
 }
 
-AMF0ObjectData::AMF0ObjectData() {
+
+AMF0Property::AMF0Property() {
+	propData = NULL;
+	cdsl_dlistNodeInit(this);
+	cdsl_hashtreeNodeInit(this,propName.getValue()->c_str());
+}
+
+AMF0Property::~AMF0Property() {
+	if(propData)
+		delete propData;
+}
+
+ssize_t AMF0Property::serialize(void* ctx, MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	return propName.serialize(ctx, stream) + propData->serialize(ctx, stream);
+}
+
+ssize_t AMF0Property::serialize(void* ctx, uint8_t* into)
+{
+	if(!into)
+		return -1;
+	return propName.serialize(ctx, into) + propData->serialize(ctx, into);
+}
+
+ssize_t AMF0Property::deserialize(void* ctx, const MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	size_t sz = propName.deserialize(ctx,stream);
+	propData = parse_amf0(ctx, stream, &sz);
+	if(!propData)
+		return -1;
+	cdsl_hashtreeNodeInit(this, propName.getValue()->c_str());
+	return sz;
+}
+
+ssize_t AMF0Property::deserialize(void* ctx, const uint8_t* from)
+{
+	if(!from)
+		return -1;
+	size_t sz = propName.deserialize(ctx, from);
+	propData = parse_amf0(ctx, from, &sz);
+	if(!propData)
+		return -1;
+	cdsl_hashtreeNodeInit(this,propName.getValue()->c_str());
+	return sz;
+}
+
+AMF0Base::AMF0Type AMF0Property::getType()
+{
+	if(propData)
+		return propData->getType();
+	return AMF0Base::OBJ_END;
+}
+
+const AMF0Base* AMF0Property::getValue()
+{
+	return propData;
+}
+
+const std::string* AMF0Property::getName()
+{
+	return propName.getValue();
+}
+
+AMF0PropertyIterable::AMF0PropertyIterable ()
+{
+	cdsl_dlistEntryInit(this);
+}
+
+AMF0PropertyIterator::AMF0PropertyIterator(AMF0PropertyIterable* iterable, bool is_mutable)
+{
+	cdsl_dlistIterInit(iterable,this);
+	this->iterable = iterable;
+	isMutable = is_mutable;
+	pthread_mutexattr_t lock_attr;
+	pthread_mutexattr_init(&lock_attr);
+	pthread_mutexattr_settype(&lock_attr, PTHREAD_MUTEX_NORMAL);
+	pthread_mutex_init(&mtx_lock, &lock_attr);
+}
+
+AMF0PropertyIterator::~AMF0PropertyIterator()
+{
+	pthread_mutex_destroy(&mtx_lock);
+}
+
+
+void AMF0PropertyIterator::reset()
+{
+	cdsl_dlistIterInit(iterable, this);
+}
+
+bool AMF0PropertyIterator::hasNext()
+{
+	return cdsl_dlistIterHasNext(this);
+}
+
+AMF0Property* AMF0PropertyIterator::next()
+{
+	return (AMF0Property*) cdsl_dlistIterNext(this);
+}
+
+void AMF0PropertyIterator::remove()
+{
+	if(!isMutable)
+		return;
+	cdsl_dlistIterRemove(this);
+}
+
+
+bool AMF0PropertyIterator::lock()
+{
+	if(pthread_mutex_lock(&mtx_lock) == EXIT_SUCCESS)
+		return true;
+	return false;
+}
+
+void AMF0PropertyIterator::unlock()
+{
+	pthread_mutex_unlock(&mtx_lock);
+}
+
+
+AMF0ObjectData::AMF0ObjectData(bool is_mutable) : iter(this,is_mutable) {
+	cdsl_hashtreeRootInit(this);
+	isMutable = is_mutable;
 }
 
 AMF0ObjectData::~AMF0ObjectData() {
+	AMF0Property* prop;
+	if(!isMutable) {
+		while((prop = (AMF0Property*) cdsl_dlistDequeue(this)))
+		{
+			delete prop;
+		}
+	}
 }
 
 ssize_t AMF0ObjectData::serialize(void* ctx, MediaStream* stream) {
+	if(!stream)
+		return -1;
+	AMF0PropertyIterator iterator(this,isMutable);
+	AMF0Property *prop;
+	size_t sz = stream->write((uint8_t) AMF0Base::OBJECT);
+	while(iterator.hasNext())
+	{
+		prop = (AMF0Property*) iterator.next();
+		if(!prop)
+			return -1;
+		sz += prop->serialize(ctx,stream);
+	}
+	return sz;
 }
 
 ssize_t AMF0ObjectData::serialize(void* ctx, uint8_t* into) {
+	if(!into)
+		return -1;
+	AMF0PropertyIterator iterator(this,isMutable);
+	AMF0Property* prop;
+	*into = AMF0Base::OBJECT;
+	size_t sz = sizeof(uint8_t);
+	while(iterator.hasNext())
+	{
+		prop = (AMF0Property*) iterator.next();
+		if(!prop)
+			return -1;
+		sz += prop->serialize(ctx, &into[sz]);
+	}
+	return sz;
 }
 
+
 ssize_t AMF0ObjectData::deserialize(void* ctx, const MediaStream* stream) {
+	if(!stream)
+		return -1;
+	size_t sz = 0;
+	AMF0Property* prop;
+	do {
+		prop = new AMF0Property();
+		sz += prop->deserialize(ctx, stream);
+		cdsl_dlistPutTail(this, prop);
+		cdsl_hashtreeInsert(this, prop);
+	} while(prop->getType() != OBJ_END);
+	return sz;
 }
 
 ssize_t AMF0ObjectData::deserialize(void* ctx, const uint8_t* from) {
+	if(!from)
+		return -1;
+	size_t sz = 0;
+	AMF0Property* prop;
+	do {
+		prop = new AMF0Property();
+		sz += prop->deserialize(ctx, from);
+		cdsl_dlistPutTail(this, prop);
+		cdsl_hashtreeInsert(this, prop);
+	}while(prop->getType() != OBJ_END);
+	return sz;
 }
 
 AMF0Base::AMF0Type AMF0ObjectData::getType()
 {
-
+	return AMF0Base::OBJECT;
 }
 
-const AMF0* AMF0ObjectData::getValue()
+size_t AMF0ObjectData::getValue()
 {
+	return cdsl_dlistSize(this);
+}
 
+Iterator<AMF0Property>* AMF0ObjectData::iterator()
+{
+	if(!iter.lock())
+		return NULL;
+
+	iter.reset();
+	return &iter;
+}
+
+void AMF0ObjectData::addProperty(AMF0Property* prop)
+{
+	if(!isMutable)
+		return;
+	if(!iter.lock())
+		return;
+	cdsl_dlistPutTail(this, prop);
+	iter.unlock();
+	cdsl_hashtreeInsert(this, prop);
+}
+
+void AMF0ObjectData::removeProperty(AMF0Property* prop)
+{
+	if(!isMutable)
+		return;
+	if(!iter.lock())
+		return;
+	cdsl_dlistRemove(prop);
+	iter.unlock();
+	cdsl_hashtreeRemove(this,prop->getName()->c_str());
+}
+
+AMF0Property* AMF0ObjectData::get(const char* key)
+{
+	return (AMF0Property*) cdsl_hashtreeLookup(this, key);
 }
 
 AMF0ReferenceData::AMF0ReferenceData() {
-
+	ref_offset = 0;
 }
-
-AMF0ReferenceData::~AMF0ReferenceData() {
-
-}
-
 
 ssize_t AMF0ReferenceData::serialize(void* ctx, MediaStream* stream) {
-
+	if(!stream)
+		return -1;
+	amf0_val obj;
+	obj.marker = AMF0Base::REF;
+	obj.ref = ref_offset;
+	return stream->write(&obj, offsetof(amf0_val, ref) + sizeof(obj.ref));
 }
 
 ssize_t AMF0ReferenceData::serialize(void* ctx, uint8_t* into) {
-
+	if(!into)
+		return -1;
+	amf0_val obj;
+	size_t sz = offsetof(amf0_val, ref) + sizeof(obj.ref);
+	obj.marker = AMF0Base::REF;
+	obj.ref = ref_offset;
+	memcpy(into, &obj, sz);
+	return sz;
 }
 
 ssize_t AMF0ReferenceData::deserialize(void* ctx, const MediaStream* stream) {
-
+	if(!stream)
+		return -1;
+	return stream->read(&ref_offset, sizeof(uint16_t));
 }
 
 ssize_t AMF0ReferenceData::deserialize(void* ctx, const uint8_t* from) {
-
+	if(!from)
+		return -1;
+	memcpy(&ref_offset, from, sizeof(uint16_t));
+	return sizeof(uint16_t);
 }
 
 AMF0Base::AMF0Type AMF0ReferenceData::getType()
 {
-
+	return AMF0Base::REF;
 }
 
 uint16_t AMF0ReferenceData::getValue()
 {
-
+	return ref_offset;
 }
 
-AMF0ECMAArrayData::AMF0ECMAArrayData() {
+AMF0ECMAArrayData::AMF0ECMAArrayData(bool is_mutable) : iter(this,is_mutable) {
+	isMutable = is_mutable;
+	cdsl_hashtreeRootInit(this);
 }
 
 AMF0ECMAArrayData::~AMF0ECMAArrayData() {
+	AMF0Property* prop;
+	if(!isMutable) {
+		while((prop = (AMF0Property*) cdsl_dlistDequeue(this)))
+		{
+			delete prop;
+		}
+	}
 }
 
 ssize_t AMF0ECMAArrayData::serialize(void* ctx, MediaStream* stream) {
+	if(!stream)
+		return -1;
+	amf0_val obj;
+	obj.marker = AMF0Base::ECMA_ARRAY;
+	obj.prop_cnt = cdsl_dlistSize(this);
+	size_t sz = stream->write(&obj, offsetof(amf0_val, prop_cnt) + sizeof(obj.prop_cnt));
+	AMF0PropertyIterator iterator(this,false);
+	AMF0Property* prop;
+	while(iterator.hasNext()) {
+		prop = (AMF0Property*) iterator.next();
+		if(!prop)
+			return -1;
+		sz += prop->serialize(ctx, stream);
+	}
+	return sz;
 }
 
 ssize_t AMF0ECMAArrayData::serialize(void* ctx, uint8_t* into) {
+	if(!into)
+		return -1;
+	amf0_val obj;
+	obj.marker = AMF0Base::ECMA_ARRAY;
+	obj.prop_cnt = cdsl_dlistSize(this);
+	size_t sz = sizeof(obj.prop_cnt) + offsetof(amf0_val, prop_cnt);
+	memcpy(into, &obj, sz);
+	AMF0PropertyIterator iterator(this,false);
+	AMF0Property* prop;
+	while(iterator.hasNext()) {
+		prop = (AMF0Property*) iterator.next();
+		if(!prop)
+			return -1;
+		sz += prop->serialize(ctx, into);
+	}
+	return sz;
 }
 
 ssize_t AMF0ECMAArrayData::deserialize(void* ctx, const MediaStream* stream) {
+	if(!stream)
+		return -1;
+	uint32_t prop_cnt , i;
+	size_t sz = stream->read(&prop_cnt, sizeof(uint32_t));
+	AMF0Property* prop;
+	for(i = 0; i < prop_cnt;i++) {
+		prop = new AMF0Property();
+		sz += prop->deserialize(ctx, stream);
+		cdsl_dlistPutTail(this,prop);
+		cdsl_hashtreeInsert(this, prop);
+	}
+	return sz;
 }
 
 ssize_t AMF0ECMAArrayData::deserialize(void* ctx, const uint8_t* from) {
+	if(!from)
+		return -1;
+	uint32_t prop_cnt, i;
+	memcpy(&prop_cnt, from, sizeof(uint32_t));
+	size_t sz = sizeof(uint32_t);
+	AMF0Property* prop;
+	for(i = 0;i < prop_cnt;i++) {
+		prop = new AMF0Property();
+		sz += prop->deserialize(ctx, from);
+		cdsl_dlistPutTail(this,prop);
+		cdsl_hashtreeInsert(this, prop);
+	}
+	return sz;
 }
 
 AMF0Base::AMF0Type AMF0ECMAArrayData::getType()
 {
-
+	return AMF0Base::ECMA_ARRAY;
 }
 
-const AMF0* AMF0ECMAArrayData::getValue()
+size_t AMF0ECMAArrayData::getValue()
 {
-
+	return cdsl_dlistSize(this);
 }
 
+Iterator<AMF0Property>* AMF0ECMAArrayData::iterator()
+{
+	if(!iter.lock())
+		return NULL;
+	iter.reset();
+	return &iter;
+}
 
 AMF0StrictArrayData::AMF0StrictArrayData() {
 }
@@ -690,4 +941,109 @@ const std::string* AMF0LongStringData::getValue()
 
 }
 
+static AMF0Base* parse_amf0(void* ctx,const MediaStream* stream,size_t* sz) {
+	if(!stream)
+		return NULL;
+
+	AMF0Base::AMF0Type type;
+	AMF0Base* val = NULL;
+	if((*sz += stream->read((uint8_t*) &type,sizeof(uint8_t))) < 0)
+		return NULL;
+	switch(type) {
+	case AMF0Base::NUMBER:
+		val = (AMF0Base*)  new AMF0NumberData();
+		break;
+	case AMF0Base::BOOLEAN:
+		val = (AMF0Base*) new AMF0BooleanData();
+		break;
+	case AMF0Base::STRING:
+		val = (AMF0Base*) new AMF0StringData();
+		break;
+	case AMF0Base::OBJECT:
+		val = (AMF0Base*) new AMF0ObjectData(false);
+		break;
+	case AMF0Base::REF:
+		val = (AMF0Base*) new AMF0ReferenceData();
+		break;
+	case AMF0Base::ECMA_ARRAY:
+		val = (AMF0Base*) new AMF0ECMAArrayData(false);
+		break;
+	case AMF0Base::OBJ_END:
+		*sz += sizeof(uint8_t);
+		break;
+	case AMF0Base::UND:
+	case AMF0Base::NUL:
+	case AMF0Base::MV_CLIP:
+		// unsupported type and assumed to be invalid data source
+		assert(false);
+		break;
+	case AMF0Base::STRICT_ARRAY:
+		val = (AMF0Base*) new AMF0StrictArrayData();
+		break;
+	case AMF0Base::DATE:
+		val = (AMF0Base*) new AMF0DateData();
+		break;
+	case AMF0Base::LSTRING:
+		val = (AMF0Base*) new AMF0LongStringData();
+		break;
+	}
+	if(val) {
+		*sz += val->deserialize(ctx, stream);
+	}
+	return val;
+}
+
+static AMF0Base* parse_amf0(void* ctx, const uint8_t* buffer, size_t* sz) {
+	if(!buffer)
+		return NULL;
+	AMF0Base* val = NULL;
+	AMF0Base::AMF0Type type;
+	type = (AMF0Base::AMF0Type) *buffer;
+	*sz++;
+	switch(type) {
+	case AMF0Base::NUMBER:
+		val = new AMF0NumberData();
+		break;
+	case AMF0Base::BOOLEAN:
+		val = new AMF0BooleanData();
+		break;
+	case AMF0Base::STRING:
+		val = new AMF0StringData();
+		break;
+	case AMF0Base::OBJECT:
+		val = new AMF0ObjectData(false);
+		break;
+	case AMF0Base::REF:
+		val = new AMF0ReferenceData();
+		break;
+	case AMF0Base::ECMA_ARRAY:
+		val = new AMF0ECMAArrayData(false);
+		break;
+	case AMF0Base::OBJ_END:
+		*sz += sizeof(uint8_t);
+		break;
+	case AMF0Base::UND:
+	case AMF0Base::NUL:
+	case AMF0Base::MV_CLIP:
+		// unsupported type and assumed to be invalid data source
+		assert(false);
+		break;
+	case AMF0Base::STRICT_ARRAY:
+		val = new AMF0StrictArrayData();
+		break;
+	case AMF0Base::DATE:
+		val = new AMF0DateData();
+		break;
+	case AMF0Base::LSTRING:
+		val = new AMF0LongStringData();
+		break;
+	}
+	if(val) {
+		*sz += val->deserialize(ctx, &buffer[1]);
+	}
+	return val;
+}
+
 } /* namespace MediaPipe */
+
+
