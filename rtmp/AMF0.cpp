@@ -75,8 +75,10 @@ struct amf0_val {
 		double numv;
 		uint8_t boolv;
 		struct amf0_str strv;
+		struct amf0_lstr lstrv;
 		uint16_t ref;
 		uint32_t prop_cnt;
+		struct amf0_date date;
 	} __attribute__((packed));
 } __attribute__((packed));
 
@@ -87,6 +89,24 @@ namespace MediaPipe {
 
 static AMF0Base* parse_amf0(void* ctx, const MediaStream* stream,size_t* sz);
 static AMF0Base* parse_amf0(void* ctx, const uint8_t* buffer, size_t* sz);
+static bool __is_big_endian(void);
+/*
+ * AMF0 has big endian byte stream and it can be different from the native byte order.
+ * however, the octect sized type has no problem with it. (e.g. character string), when even the byte order is different.
+ * the problematic case is only the size of type is larger than octet. but even here, not all the byte stream should be bswapped.
+ * because we do actually use just part of them. for example, the lenght of packet should be bswapped when parsing the whole packet.
+ * but after the moment, it's barely used. from this kind of practical use case, we can optimize the performance, by reducing the usage of bswap.
+ *
+ * basically all the binary is saved in big endian during deserialization and serialization.
+ * however, it will be bswapped on demand. (for example, in getter / setter of the instance or parsing)
+ *
+ * how-to-detect-native byteorder
+ * I don't like the approach that branches code with some macro variable which is fixed in build time.
+ * it's less readable, and make source code look spaghetti.
+ * I prefer detect it at runtime with investigating int or short type
+ * it makes C look like C more
+ */
+static bool IS_BIG_ENDIAN = __is_big_endian();
 
 AMF0Base::AMF0Base()
 {
@@ -103,7 +123,7 @@ AMF0Iterable::AMF0Iterable() {
 }
 
 
-AMF0::AMF0Iterator::AMF0Iterator(AMF0Iterable* iterable,bool is_mutable) {
+AMF0Iterator::AMF0Iterator(AMF0Iterable* iterable,bool is_mutable) {
 	cdsl_slistIterInit(iterable,this);
 	this->is_mutable = is_mutable;
 	this->iterable = iterable;
@@ -113,41 +133,38 @@ AMF0::AMF0Iterator::AMF0Iterator(AMF0Iterable* iterable,bool is_mutable) {
 	pthread_mutex_init(&mtx_lock,&lock_attr);
 }
 
-AMF0::AMF0Iterator::~AMF0Iterator() {
-	/*
-	 * nothing to be cleaned
-	 */
+AMF0Iterator::~AMF0Iterator() {
 	pthread_mutex_destroy(&mtx_lock);
 }
 
-bool AMF0::AMF0Iterator::hasNext() {
+bool AMF0Iterator::hasNext() {
 	return cdsl_iterHasNext(this);
 }
 
-void AMF0::AMF0Iterator::reset() {
+void AMF0Iterator::reset() {
 	cdsl_slistIterInit(iterable, this);
 }
 
 
-AMF0Base* AMF0::AMF0Iterator::next() {
+AMF0Base* AMF0Iterator::next() {
 	return (AMF0Base*) cdsl_iterNext(this);
 }
 
-void AMF0::AMF0Iterator::remove() {
+void AMF0Iterator::remove() {
 	if(!is_mutable)
 		return;
 	cdsl_iterRemove(this);
 }
 
 
-bool AMF0::AMF0Iterator::lock()
+bool AMF0Iterator::lock()
 {
 	if(pthread_mutex_lock(&mtx_lock) == EXIT_SUCCESS)
 		return true;
 	return false;
 }
 
-void AMF0::AMF0Iterator::unlock()
+void AMF0Iterator::unlock()
 {
 	pthread_mutex_unlock(&mtx_lock);
 }
@@ -329,6 +346,19 @@ AMF0Base::AMF0Type AMF0NumberData::getType()
 
 double AMF0NumberData::getValue()
 {
+	if(!IS_BIG_ENDIAN)
+	{
+		/*
+		 *  in case of platform byte order is different from AMF0 byte order(be)
+		 *  byte swap performed
+		 */
+		switch(sizeof(double)){
+		case 4:
+			return __bswap_32(val);
+		case 8:
+			return __bswap_64(val);
+		}
+	}
 	return val;
 }
 
@@ -401,7 +431,17 @@ ssize_t AMF0StringData::serialize(void* ctx, MediaStream* stream) {
 	amf0_val obj;
 	size_t sz;
 	obj.marker = (uint8_t) AMF0Base::STRING;
-	obj.strv.len = val.length();
+	if(!IS_BIG_ENDIAN)
+	{
+		/*
+		 * native byte order is different from AMF0
+		 */
+		obj.strv.len = __bswap_16((uint16_t) val.length());
+	}
+	else
+	{
+		obj.strv.len = val.length();
+	}
 	sz = stream->write((uint8_t*) &obj,offsetof(amf0_val, strv.len) + sizeof(obj.strv.len));
 	sz += stream->write((uint8_t*)val.c_str(), obj.strv.len);
 	return sz;
@@ -412,10 +452,17 @@ ssize_t AMF0StringData::serialize(void* ctx, uint8_t* into) {
 		return -1;
 	amf0_val obj;
 	obj.marker = (uint8_t) AMF0Base::STRING;
-	obj.strv.len = val.length();
+	if(!IS_BIG_ENDIAN)
+	{
+		obj.strv.len = __bswap_16((uint16_t) val.length());
+	}
+	else
+	{
+		obj.strv.len = val.length();
+	}
 	size_t sz = offsetof(amf0_val, strv.len) + sizeof(obj.strv.len);
 	memcpy(into, &obj, sz);
-	memcpy(into, val.c_str(), obj.strv.len);
+	memcpy(into, val.c_str(), val.length());
 	return sz + obj.strv.len;
 }
 
@@ -427,11 +474,17 @@ ssize_t AMF0StringData::deserialize(void* ctx, const MediaStream* stream) {
 	sz = stream->read((uint8_t*) &obj.strv.len,sizeof(obj.strv.len));
 	if(obj.strv.len == 0)
 		return sz;
-	sz += obj.strv.len;
+	if(!IS_BIG_ENDIAN)
+	{
+		obj.strv.len = __bswap_16(obj.strv.len);
+	}
+
 	val.resize(obj.strv.len);
-	while(obj.strv.len--){
+	while(obj.strv.len--)
+	{
 		val.push_back(stream->read());
 	}
+	sz += obj.strv.len;
 	return sz;
 }
 
@@ -443,13 +496,17 @@ ssize_t AMF0StringData::deserialize(void* ctx, const uint8_t* from) {
 	memcpy(&obj.strv.len, from, sizeof(obj.strv.len));
 	if(obj.strv.len == 0)
 		return sz;
+	if(!IS_BIG_ENDIAN)
+	{
+		obj.strv.len = __bswap_16(obj.strv.len);
+	}
+
 	val.resize(obj.strv.len);
 	char* c = (char*) &from[sz];
-	sz += obj.strv.len;
-
 	while(obj.strv.len--){
 		val.push_back(*c++);
 	}
+	sz += obj.strv.len;
 	return sz;
 }
 
@@ -604,7 +661,7 @@ AMF0ObjectData::~AMF0ObjectData() {
 ssize_t AMF0ObjectData::serialize(void* ctx, MediaStream* stream) {
 	if(!stream)
 		return -1;
-	AMF0PropertyIterator iterator(this,isMutable);
+	AMF0PropertyIterator iterator(this, isMutable);
 	AMF0Property *prop;
 	size_t sz = stream->write((uint8_t) AMF0Base::OBJECT);
 	while(iterator.hasNext())
@@ -704,7 +761,7 @@ void AMF0ObjectData::removeProperty(AMF0Property* prop)
 	cdsl_hashtreeRemove(this,prop->getName()->c_str());
 }
 
-AMF0Property* AMF0ObjectData::get(const char* key)
+AMF0Property* AMF0ObjectData::lookupProperty(const char* key)
 {
 	return (AMF0Property*) cdsl_hashtreeLookup(this, key);
 }
@@ -753,6 +810,8 @@ AMF0Base::AMF0Type AMF0ReferenceData::getType()
 
 uint16_t AMF0ReferenceData::getValue()
 {
+	if(!IS_BIG_ENDIAN)
+		return __bswap_16(ref_offset);
 	return ref_offset;
 }
 
@@ -777,6 +836,10 @@ ssize_t AMF0ECMAArrayData::serialize(void* ctx, MediaStream* stream) {
 	amf0_val obj;
 	obj.marker = AMF0Base::ECMA_ARRAY;
 	obj.prop_cnt = cdsl_dlistSize(this);
+	if(!IS_BIG_ENDIAN)
+	{
+		obj.prop_cnt = __bswap_32(obj.prop_cnt);
+	}
 	size_t sz = stream->write(&obj, offsetof(amf0_val, prop_cnt) + sizeof(obj.prop_cnt));
 	AMF0PropertyIterator iterator(this,false);
 	AMF0Property* prop;
@@ -795,6 +858,11 @@ ssize_t AMF0ECMAArrayData::serialize(void* ctx, uint8_t* into) {
 	amf0_val obj;
 	obj.marker = AMF0Base::ECMA_ARRAY;
 	obj.prop_cnt = cdsl_dlistSize(this);
+	if(!IS_BIG_ENDIAN)
+	{
+		obj.prop_cnt = __bswap_32(obj.prop_cnt);
+	}
+
 	size_t sz = sizeof(obj.prop_cnt) + offsetof(amf0_val, prop_cnt);
 	memcpy(into, &obj, sz);
 	AMF0PropertyIterator iterator(this,false);
@@ -813,6 +881,10 @@ ssize_t AMF0ECMAArrayData::deserialize(void* ctx, const MediaStream* stream) {
 		return -1;
 	uint32_t prop_cnt , i;
 	size_t sz = stream->read(&prop_cnt, sizeof(uint32_t));
+	if(!IS_BIG_ENDIAN)
+	{
+		prop_cnt = __bswap_32(prop_cnt);
+	}
 	AMF0Property* prop;
 	for(i = 0; i < prop_cnt;i++) {
 		prop = new AMF0Property();
@@ -829,6 +901,10 @@ ssize_t AMF0ECMAArrayData::deserialize(void* ctx, const uint8_t* from) {
 	uint32_t prop_cnt, i;
 	memcpy(&prop_cnt, from, sizeof(uint32_t));
 	size_t sz = sizeof(uint32_t);
+	if(!IS_BIG_ENDIAN)
+	{
+		prop_cnt = __bswap_32(prop_cnt);
+	}
 	AMF0Property* prop;
 	for(i = 0;i < prop_cnt;i++) {
 		prop = new AMF0Property();
@@ -857,88 +933,367 @@ Iterator<AMF0Property>* AMF0ECMAArrayData::iterator()
 	return &iter;
 }
 
-AMF0StrictArrayData::AMF0StrictArrayData() {
+void AMF0ECMAArrayData::addProperty(AMF0Property* prop)
+{
+	if(!prop)
+		return;
+	if(!isMutable)
+		return;
+	if(!iter.lock())
+		return;
+	cdsl_dlistPutTail(this, prop);
+	iter.unlock();
+	cdsl_hashtreeInsert(this, prop);
 }
 
-AMF0StrictArrayData::~AMF0StrictArrayData() {
+void AMF0ECMAArrayData::removeProperty(AMF0Property* prop)
+{
+	if(!prop)
+		return;
+	if(!isMutable)
+		return;
+	if(!iter.lock())
+		return;
+	cdsl_dlistRemove(prop);
+	iter.unlock();
+	cdsl_hashtreeRemove(this,prop->_str_key);
 }
 
-ssize_t AMF0StrictArrayData::serialize(void* ctx, MediaStream* stream) {
+AMF0Property* AMF0ECMAArrayData::lookupProperty(const char* key)
+{
+	if(!key)
+		return NULL;
+	return (AMF0Property*) cdsl_hashtreeLookup(this,key);
 }
 
-ssize_t AMF0StrictArrayData::serialize(void* ctx, uint8_t* into) {
+AMF0StrictArrayData::AMF0StrictArrayData(bool is_mutable) : iter(this,is_mutable)
+{
+	isMutable = is_mutable;
 }
 
-ssize_t AMF0StrictArrayData::deserialize(void* ctx, const MediaStream* stream) {
+AMF0StrictArrayData::~AMF0StrictArrayData()
+{
+	if(!isMutable) {
+		AMF0Base* val;
+		while(!cdsl_slistIsEmpty(this))
+		{
+			val = (AMF0Base*) cdsl_slistDequeue(this);
+			delete val;
+		}
+	}
 }
 
-ssize_t AMF0StrictArrayData::deserialize(void* ctx, const uint8_t* from) {
+ssize_t AMF0StrictArrayData::serialize(void* ctx, MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	amf0_val hdr;
+	hdr.marker = AMF0Base::STRICT_ARRAY;
+	hdr.prop_cnt = cdsl_slistSize(this);
+	if(!IS_BIG_ENDIAN)
+	{
+		hdr.prop_cnt = __bswap_32(hdr.prop_cnt);
+	}
+	size_t sz = stream->write(&hdr, sizeof(hdr.prop_cnt) + offsetof(amf0_val, prop_cnt));
+	AMF0Iterator iterator(this,false);
+	AMF0Base* val;
+	while(iterator.hasNext())
+	{
+		val = (AMF0Base*) iterator.next();
+		if(!val)
+			return -1;
+		sz += val->serialize(ctx, stream);
+	}
+	return sz;
+}
+
+ssize_t AMF0StrictArrayData::serialize(void* ctx, uint8_t* into)
+{
+	if(!into)
+		return -1;
+	amf0_val hdr;
+	hdr.marker = AMF0Base::STRICT_ARRAY;
+	hdr.prop_cnt = cdsl_slistSize(this);
+	if(!IS_BIG_ENDIAN)
+	{
+		hdr.prop_cnt = __bswap_32(hdr.prop_cnt);
+	}
+	memcpy(into, &hdr, sizeof(hdr.prop_cnt) + offsetof(amf0_val, prop_cnt));
+	size_t sz = sizeof(uint32_t);
+	AMF0Iterator iterator(this,false);
+	AMF0Base* val;
+	while(iterator.hasNext())
+	{
+		val = (AMF0Base*) iterator.next();
+		if(!val)
+			return -1;
+		sz += val->serialize(ctx, into);
+	}
+	return sz;
+}
+
+ssize_t AMF0StrictArrayData::deserialize(void* ctx, const MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	uint32_t len;
+	size_t sz = stream->read(&len, sizeof(uint32_t));
+	if(!IS_BIG_ENDIAN)
+	{
+		len = __bswap_32(len);
+	}
+	AMF0Base* val;
+	while(len--)
+	{
+		val = parse_amf0(ctx,stream,&sz);
+		if(!val)
+			return -1;
+		cdsl_slistPutHead(this, val);
+	}
+	return sz;
+}
+
+ssize_t AMF0StrictArrayData::deserialize(void* ctx, const uint8_t* from)
+{
+	if(!from)
+		return -1;
+	uint32_t len;
+	memcpy(&len, from,sizeof(uint32_t));
+	size_t sz = sizeof(uint32_t);
+	if(!IS_BIG_ENDIAN)
+	{
+		len = __bswap_32(len);
+	}
+	AMF0Base* val;
+	while(len--)
+	{
+		val = parse_amf0(ctx, from, &sz);
+		if(!val)
+			return -1;
+		cdsl_slistPutHead(this, val);
+	}
+	return sz;
 }
 
 AMF0Base::AMF0Type AMF0StrictArrayData::getType()
 {
-
+	return AMF0Base::STRICT_ARRAY;
 }
 
-const AMF0* AMF0StrictArrayData::getValue()
+size_t AMF0StrictArrayData::getValue()
 {
-
+	return cdsl_slistSize(this);
 }
 
-AMF0DateData::AMF0DateData() {
+Iterator<AMF0Base>* AMF0StrictArrayData::iterator()
+{
+	if(!iter.lock())
+		return NULL;
+	iter.reset();
+	return &iter;
 }
 
-AMF0DateData::~AMF0DateData() {
+int AMF0StrictArrayData::addValue(AMF0Base* val)
+{
+	if(!isMutable || !val)
+		return -1;
+	if(!iter.lock())
+		return -1;
+	int pos = cdsl_slistPutTail(this,val);
+	iter.unlock();
+	return pos;
 }
 
-ssize_t AMF0DateData::serialize(void* ctx, MediaStream* stream) {
+AMF0Base* AMF0StrictArrayData::removeValue(int pos)
+{
+	if(!isMutable)
+		return NULL;
+	if(!iter.lock())
+		return NULL;
+	AMF0Base* del = (AMF0Base*) cdsl_slistRemoveAt(this, pos);
+	iter.unlock();
+	return del;
 }
 
-ssize_t AMF0DateData::serialize(void* ctx, uint8_t* into) {
+void AMF0StrictArrayData::removeValue(AMF0Base* val)
+{
+	if(!isMutable || !val)
+		return;
+	if(!iter.lock())
+		return;
+	cdsl_slistRemove(this, val);
+	iter.unlock();
 }
 
-ssize_t AMF0DateData::deserialize(void* ctx, const MediaStream* stream) {
+AMF0DateData::AMF0DateData() : epochmil(0), utc_offset(0)
+{
 }
 
-ssize_t AMF0DateData::deserialize(void* ctx, const uint8_t* from) {
+AMF0DateData::~AMF0DateData()
+{
+}
+
+ssize_t AMF0DateData::serialize(void* ctx, MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	amf0_val val;
+	val.marker = AMF0Base::DATE;
+	val.date.epoch_mills = epochmil;
+	val.date.utc_adj = utc_offset;
+	return stream->write(&val, sizeof(val.date) + offsetof(amf0_val, date));
+}
+
+ssize_t AMF0DateData::serialize(void* ctx, uint8_t* into)
+{
+	if(!into)
+		return -1;
+	amf0_val val;
+	size_t sz = sizeof(val.date) + offsetof(amf0_val,date);
+	val.marker = AMF0Base::DATE;
+	val.date.epoch_mills = epochmil;
+	val.date.utc_adj = utc_offset;
+	memcpy(into, &val, sz);
+	return sz;
+}
+
+ssize_t AMF0DateData::deserialize(void* ctx, const MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	amf0_date date;
+	size_t sz = stream->read(&date, sizeof(amf0_date));
+	epochmil = date.epoch_mills;
+	utc_offset = date.utc_adj;
+	return sz;
+}
+
+ssize_t AMF0DateData::deserialize(void* ctx, const uint8_t* from)
+{
+	if(!from)
+		return -1;
+	amf0_date date;
+	size_t sz = sizeof(amf0_date);
+	memcpy(&date,from, sizeof(amf0_date));
+	epochmil = date.epoch_mills;
+	utc_offset = date.utc_adj;
+	return sz;
 }
 
 AMF0Base::AMF0Type AMF0DateData::getType()
 {
-
+	return AMF0Type::DATE;
 }
 
 time_t AMF0DateData::getValue()
 {
-
+	time_t time = (time_t) epochmil;
+	if(!IS_BIG_ENDIAN)
+	{
+		time = __bswap_64(time);
+	}
+	struct tm* gmt = localtime(&time);
+	gmt->tm_gmtoff = utc_offset;
+	if(!IS_BIG_ENDIAN)
+	{
+		gmt->tm_gmtoff = __bswap_16(gmt->tm_gmtoff);
+	}
+	return mktime(gmt);
 }
 
-AMF0LongStringData::AMF0LongStringData() {
+AMF0LongStringData::AMF0LongStringData()
+{
 }
 
-AMF0LongStringData::~AMF0LongStringData() {
+AMF0LongStringData::~AMF0LongStringData()
+{
 }
 
-ssize_t AMF0LongStringData::serialize(void* ctx, MediaStream* stream) {
+ssize_t AMF0LongStringData::serialize(void* ctx, MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	amf0_val hdr;
+	hdr.marker = AMF0Base::LSTRING;
+	hdr.lstrv.len = lstr.length();
+	if(!IS_BIG_ENDIAN)
+	{
+		hdr.lstrv.len = __bswap_32(hdr.lstrv.len);
+	}
+	size_t sz = stream->write(&hdr, offsetof(amf0_val, lstrv) + sizeof(hdr.lstrv.len));
+	sz += stream->write(lstr.c_str(), lstr.length());
+	return sz;
 }
 
-ssize_t AMF0LongStringData::serialize(void* ctx, uint8_t* into) {
+ssize_t AMF0LongStringData::serialize(void* ctx, uint8_t* into)
+{
+	if(!into)
+		return -1;
+	amf0_val hdr;
+	hdr.marker = AMF0Base::LSTRING;
+	hdr.lstrv.len = lstr.length();
+	if(!IS_BIG_ENDIAN)
+	{
+		hdr.lstrv.len = __bswap_32(hdr.lstrv.len);
+	}
+	size_t strl = lstr.length();
+	size_t sz = offsetof(amf0_val,lstrv) + sizeof(hdr.lstrv.len);
+	memcpy(into, &hdr, sz);
+	sz += strl;
+	memcpy(into, lstr.c_str(),strl);
+	return sz;
 }
 
-ssize_t AMF0LongStringData::deserialize(void* ctx, const MediaStream* stream) {
+ssize_t AMF0LongStringData::deserialize(void* ctx, const MediaStream* stream)
+{
+	if(!stream)
+		return -1;
+	uint32_t strl;
+	size_t sz = stream->read(&strl, sizeof(uint32_t));
+	if(!IS_BIG_ENDIAN)
+	{
+		strl = __bswap_32(strl);
+	}
+	char c;
+	lstr.resize(strl);
+	while(strl--) {
+		c = (char) stream->read();
+		if(c < 0)
+			return -1;
+		lstr.push_back(c);
+		sz++;
+	}
+	return sz;
 }
 
-ssize_t AMF0LongStringData::deserialize(void* ctx, const uint8_t* from) {
+ssize_t AMF0LongStringData::deserialize(void* ctx, const uint8_t* from)
+{
+	if(!from)
+		return -1;
+	uint32_t strl;
+	size_t sz = sizeof(uint32_t);
+	memcpy(&strl, from, sz);
+	if(!IS_BIG_ENDIAN)
+	{
+		strl = __bswap_32(strl);
+	}
+	char* c = (char*) &from[sz];
+	lstr.resize(strl);
+	while(strl--) {
+		lstr.push_back(*c++);
+		sz++;
+	}
+	return sz;
 }
 
 AMF0Base::AMF0Type AMF0LongStringData::getType()
 {
-
+	return AMF0Base::LSTRING;
 }
 
 const std::string* AMF0LongStringData::getValue()
 {
-
+	return &lstr;
 }
 
 static AMF0Base* parse_amf0(void* ctx,const MediaStream* stream,size_t* sz) {
@@ -978,7 +1333,7 @@ static AMF0Base* parse_amf0(void* ctx,const MediaStream* stream,size_t* sz) {
 		assert(false);
 		break;
 	case AMF0Base::STRICT_ARRAY:
-		val = (AMF0Base*) new AMF0StrictArrayData();
+		val = (AMF0Base*) new AMF0StrictArrayData(false);
 		break;
 	case AMF0Base::DATE:
 		val = (AMF0Base*) new AMF0DateData();
@@ -999,7 +1354,7 @@ static AMF0Base* parse_amf0(void* ctx, const uint8_t* buffer, size_t* sz) {
 	AMF0Base* val = NULL;
 	AMF0Base::AMF0Type type;
 	type = (AMF0Base::AMF0Type) *buffer;
-	*sz++;
+	*sz += sizeof(uint8_t);
 	switch(type) {
 	case AMF0Base::NUMBER:
 		val = new AMF0NumberData();
@@ -1029,7 +1384,7 @@ static AMF0Base* parse_amf0(void* ctx, const uint8_t* buffer, size_t* sz) {
 		assert(false);
 		break;
 	case AMF0Base::STRICT_ARRAY:
-		val = new AMF0StrictArrayData();
+		val = new AMF0StrictArrayData(false);
 		break;
 	case AMF0Base::DATE:
 		val = new AMF0DateData();
@@ -1043,6 +1398,17 @@ static AMF0Base* parse_amf0(void* ctx, const uint8_t* buffer, size_t* sz) {
 	}
 	return val;
 }
+
+static bool __is_big_endian(void)
+{
+	uint32_t tword;
+	uint8_t* toctet = (uint8_t*) &tword;
+	tword = 1;
+	if(toctet[3])
+		return true;
+	return false;
+}
+
 
 } /* namespace MediaPipe */
 

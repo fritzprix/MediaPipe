@@ -22,7 +22,9 @@
 
 namespace MediaPipe {
 
-class AMF0Base : public Serializable<void> ,slistNode_t{
+class AMF0Base : public Serializable<void> ,
+                 public slistNode_t {
+
 	friend class AMF0;
 public:
 	typedef enum {
@@ -46,10 +48,28 @@ public:
 	virtual AMF0Type getType() = 0;
 };
 
-class AMF0Iterable : public Iterable<AMF0Base> , public slistEntry_t {
+class AMF0Iterable : public Iterable<AMF0Base> ,
+                     public slistEntry_t {
 public:
 	AMF0Iterable();
 	virtual ~AMF0Iterable() {};
+};
+
+class AMF0Iterator :public Iterator<AMF0Base> ,
+                    listIter_t {
+public:
+	AMF0Iterator(AMF0Iterable* iterable, bool is_mutable);
+	~AMF0Iterator();
+	bool hasNext();
+	void reset();
+	AMF0Base* next();
+	void remove();
+	bool lock();
+	void unlock();
+private:
+	pthread_mutex_t mtx_lock;
+	bool is_mutable;
+	AMF0Iterable* iterable;
 };
 
 
@@ -61,23 +81,6 @@ public:
 		AMF0Data();
 		virtual ~AMF0Data() {};
 		virtual T getValue() = 0;
-	};
-
-
-	class AMF0Iterator :public Iterator<AMF0Base> , listIter_t {
-	public:
-		AMF0Iterator(AMF0Iterable* iterable, bool is_mutable);
-		~AMF0Iterator();
-		bool hasNext();
-		void reset();
-		AMF0Base* next();
-		void remove();
-		bool lock();
-		void unlock();
-	private:
-		pthread_mutex_t mtx_lock;
-		bool is_mutable;
-		AMF0Iterable* iterable;
 	};
 
 	/**
@@ -205,7 +208,7 @@ public:
 	Iterator<AMF0Property>* iterator();
 	void addProperty(AMF0Property* prop);
 	void removeProperty(AMF0Property* prop);
-	AMF0Property* get(const char* key);
+	AMF0Property* lookupProperty(const char* key);
 private:
 	bool isMutable;
 	AMF0PropertyIterator iter;
@@ -225,7 +228,9 @@ private:
 	uint16_t ref_offset;
 };
 
-class AMF0ECMAArrayData : public AMF0PropertyIterable, public AMF0::AMF0Data<size_t>, public hashRoot_t {
+class AMF0ECMAArrayData : public AMF0PropertyIterable,
+                          public AMF0::AMF0Data<size_t>,
+                          public hashRoot_t {
 public:
 	AMF0ECMAArrayData(bool is_mutable);
 	~AMF0ECMAArrayData();
@@ -238,23 +243,30 @@ public:
 	Iterator<AMF0Property>* iterator();
 	void addProperty(AMF0Property* prop);
 	void removeProperty(AMF0Property* prop);
-	AMF0Property* get(const char* key);
+	AMF0Property* lookupProperty(const char* key);
 private:
 	bool isMutable;
 	AMF0PropertyIterator iter;
 };
 
-class AMF0StrictArrayData : public AMF0::AMF0Data<const AMF0*> {
+class AMF0StrictArrayData : public AMF0::AMF0Data<size_t>,
+                            public AMF0Iterable {
 public:
-	AMF0StrictArrayData();
+	AMF0StrictArrayData(bool is_mutable);
 	~AMF0StrictArrayData();
 	ssize_t serialize(void* ctx, MediaStream* stream) ;
 	ssize_t serialize(void* ctx, uint8_t* into);
 	ssize_t deserialize(void* ctx, const MediaStream* stream);
 	ssize_t deserialize(void* ctx, const uint8_t* from);
 	AMF0Base::AMF0Type getType();
-	const AMF0* getValue();
-
+	size_t getValue();
+	Iterator<AMF0Base>* iterator();
+	int addValue(AMF0Base* val);
+	AMF0Base* removeValue(int pos);
+	void removeValue(AMF0Base* val);
+private:
+	bool isMutable;
+	AMF0Iterator iter;
 };
 
 class AMF0DateData : public AMF0::AMF0Data<time_t> {
@@ -267,6 +279,9 @@ public:
 	ssize_t deserialize(void* ctx, const uint8_t* from);
 	AMF0Base::AMF0Type getType();
 	time_t getValue();
+private:
+	double epochmil;
+	int16_t utc_offset;
 };
 
 class AMF0LongStringData : public AMF0::AMF0Data<const std::string*> {
@@ -279,6 +294,8 @@ public:
 	ssize_t deserialize(void* ctx, const uint8_t* from);
 	AMF0Base::AMF0Type getType();
 	const std::string* getValue();
+private:
+	std::string lstr;
 };
 
 
