@@ -208,9 +208,32 @@ ssize_t FLVTag::deserialize(void* ctx, const MediaStream* stream) {
 }
 
 ssize_t MediaPipe::FLVTag::serialize(void* ctx, uint8_t* into) {
+	flv_tag_t tag;
+	if(!into)
+	{
+		return -1;
+	}
+	tag.type = type;
+	tag.time_stmp_ex = t_stmp >> 24;
+	__bswap_u32_to_u24(this->psize, &tag.data_sz);
+	__bswap_u32_to_u24(this->t_stmp, &tag.time_stmp);
+	__bswap_u32_to_u24(this->stream_id, &tag.stream_id);
+	memcpy(into, &tag, sizeof(flv_tag_t));
+	return sizeof(flv_tag_t);
 }
 
 ssize_t MediaPipe::FLVTag::deserialize(void* ctx, const uint8_t* from) {
+	flv_tag_t tag;
+	if(!from)
+	{
+		return -1;
+	}
+	memcpy(&tag, from, sizeof(flv_tag_t));
+	type = (TagType) tag.type;
+	t_stmp = (tag.time_stmp_ex << 24) | __bswap_u24_to_u32(&tag.time_stmp);
+	psize = __bswap_u24_to_u32(&tag.data_sz);
+	stream_id = __bswap_u24_to_u32(&tag.stream_id);
+	return sizeof(flv_tag_t);
 }
 
 
@@ -247,12 +270,12 @@ void FLVTag::setStreamID(uint32_t stream_id) {
 }
 
 Payload<FLVTag>* FLVTag::getPayload(){
-
+	return NULL;
 }
 
 bool FLVTag::setPayload(const Payload<FLVTag>* payload)
 {
-
+	return false;
 }
 
 FLVAudioTag::FLVAudioTag(size_t bsz) {
@@ -332,71 +355,53 @@ ssize_t FLVAudioTag::deserialize(FLVTag* ctx, const MediaStream* stream) {
 		::exit(-1);
 	}
 
+	size_t rsz = 0;
 	uint8_t audio_tag_sz = 0;
-	uint8_t pread_offset = 0;
 	flv_audio_t* audio_tag = (flv_audio_t*) obj_buffer;
-	if(this->snd_format == AAC)
+	if((rsz = stream->read(audio_tag , sizeof(flv_audio_t))) < 0)
 	{
-		// if AAC chunk read stream with full size of FLVAudioTag (2 bytes)
-		if(stream->read((uint8_t*) audio_tag, sizeof(flv_audio_t)) < 0)
-		{
-			return -1;
-		}
-		if((audio_tag->flags >> 4) != this->snd_format)
-		{
-			// sound format inconsistent!!
-			// means this audio chunk is not AAC.
-			// and therefore last octet is actually first octet of payload
-			// so it should be copied into payload position
-			*((uint8_t*) &audio_tag[1]) = audio_tag->aac_ex.aac_pkt_type;
-			pread_offset += sizeof(audio_tag->aac_ex);
-			audio_tag_sz += sizeof(audio_tag->flags);
-		}
-		else
-		{
-			// sound format consistent
-			// means this chunk is AAC
-			// so fill out AACPktType
-			aac_pkt_type = (AACPktType) audio_tag->aac_ex.aac_pkt_type;
-			audio_tag_sz += sizeof(flv_audio_t);
-		}
-
+		return -1;
+	}
+	this->snd_format = (SoundFormat) (audio_tag->flags >> 4);
+	this->snd_rate = (SoundRate) ((audio_tag->flags >> 2) & 3);
+	this->snd_sz = (SoundSize) ((audio_tag->flags >> 1) & 1);
+	this->snd_type = (SoundType) (audio_tag->flags & 1);
+	if(snd_format == AAC)
+	{
+		aac_pkt_type = (AACPktType) audio_tag->aac_ex.aac_pkt_type;
+		audio_tag_sz = sizeof(flv_audio_t);
 	}
 	else
 	{
-		// if non-AAC chunk read stream only single byte
-		if(stream->read((uint8_t*) audio_tag, sizeof(audio_tag->flags)) < 0)
-		{
-			return -1;
-		}
 		audio_tag_sz = sizeof(audio_tag->flags);
 	}
-	// update audio stream information
-	this->snd_format = (SoundFormat) (audio_tag->flags >> 4);
-	this->snd_rate = (SoundRate)((audio_tag->flags & 0xF) >> 2);
-	this->snd_sz = (SoundSize) ((audio_tag->flags & 0x6) >> 1);
-	this->snd_type = (SoundType) (audio_tag->flags & 0x1);
-
-	return stream->read(((uint8_t*) &audio_tag[1]) + pread_offset, ctx->getSize() - audio_tag_sz) + audio_tag_sz;
+	rsz += stream->read(&audio_tag[1], ctx->getSize() - audio_tag_sz);
+	return rsz;
 }
 
 
 
 ssize_t MediaPipe::FLVAudioTag::serialize(FLVTag* ctx, uint8_t* into) {
-	if(!into || !ctx)
-		return -1;
-	const FLVTag* tag = (const FLVTag* ) ctx;
+	if(!into || !ctx) {
+		::perror("null pointer argument !!");
+		::exit(-1);
+	}
 	size_t psz = 0, hsz = 0;
 	flv_audio_t* audio_tag = (flv_audio_t*) obj_buffer;
 	/*
 	 * get payload size in bytes
 	 * payload size = size of audio_tag + size of raw audio data in bytes
 	 */
-	psz = tag->getSize();
+	psz = ctx->getSize();
 
 	// calculate header size depends on sound format
+	audio_tag->flags = (snd_format << 4);
+	audio_tag->flags |= (snd_rate << 2);
+	audio_tag->flags |= (snd_sz << 1);
+	audio_tag->flags |= (snd_type);
 	if(snd_format == AAC)
 	{
+		audio_tag->aac_ex.aac_pkt_type = aac_pkt_type;
 		hsz = sizeof(flv_audio_t);
 	}
 	else
@@ -404,12 +409,37 @@ ssize_t MediaPipe::FLVAudioTag::serialize(FLVTag* ctx, uint8_t* into) {
 		hsz = sizeof(audio_tag->flags);
 	}
 
+	::memcpy(into, audio_tag, hsz);
 	::memcpy(into, &audio_tag[1], psz - hsz);
-	return psz - hsz;
+	return psz;
 }
 
-ssize_t FLVAudioTag::deserialize(FLVTag* ctx, const uint8_t* from) {
 
+ssize_t FLVAudioTag::deserialize(FLVTag* ctx, const uint8_t* from) {
+	if(!ctx || !from) {
+		::perror("null pointer argument !!");
+		::exit(-1);
+	}
+
+	flv_audio_t* audio_tag = (flv_audio_t*) obj_buffer;
+	memcpy(audio_tag, from, sizeof(flv_audio_t));
+	uint32_t total_siz = ctx->getSize();
+	uint8_t audio_tag_sz = 0;
+
+	this->snd_format = (SoundFormat) (audio_tag->flags >> 4);
+	this->snd_rate = (SoundRate) ((audio_tag->flags >> 2) & 3);
+	this->snd_sz = (SoundSize) ((audio_tag->flags >> 1) & 1);
+	this->snd_type = (SoundType) (audio_tag->flags & 1);
+	if(snd_format == AAC)
+	{
+		aac_pkt_type = (AACPktType) audio_tag->aac_ex.aac_pkt_type;
+		audio_tag_sz = sizeof(flv_audio_t);
+	}else
+	{
+		audio_tag_sz = sizeof(audio_tag->flags);
+	}
+	memcpy(&audio_tag[1],from,total_siz - audio_tag_sz);
+	return total_siz;
 }
 
 Payload<FLVAudioTag>* FLVAudioTag::getPayload()

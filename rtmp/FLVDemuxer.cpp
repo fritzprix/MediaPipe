@@ -19,11 +19,22 @@ FLVDemuxer::~FLVDemuxer() {
 }
 
 int FLVDemuxer::setFLVPayloadEventHandler(FLVTag::TagType tagType, PayloadEventHandler<FLVTag>* handler) {
-
+	switch(tagType) {
+	case FLVTag::Audio:
+		videoPayloadHandler = (FLVPayloadEventHandler*) handler;
+		break;
+	case FLVTag::Video:
+		audioPayloadHandler = (FLVPayloadEventHandler*) handler;
+		break;
+	case FLVTag::Script:
+		scriptPayloadHandler = (FLVPayloadEventHandler*) handler;
+		break;
+	}
 }
 
 void FLVDemuxer::parse() {
 	FLVTag tag;
+	tag.deserialize(NULL, input_stream);
 }
 
 

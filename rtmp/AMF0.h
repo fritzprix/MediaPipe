@@ -10,8 +10,10 @@
 #define RTMP_AMF0_H_
 
 #include <string>
+#include <mutex>
 #include <stdint.h>
 #include <pthread.h>
+
 #include "Iterator.h"
 #include "core/MediaStream.h"
 #include "core/Serialize.h"
