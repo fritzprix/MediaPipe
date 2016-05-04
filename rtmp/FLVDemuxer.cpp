@@ -10,7 +10,6 @@
 namespace MediaPipe {
 
 FLVDemuxer::FLVDemuxer(MediaStream* stream) {
-	videoPayloadHandler = audioPayloadHandler = scriptPayloadHandler = NULL;
 	input_stream = stream;
 }
 
@@ -18,23 +17,29 @@ FLVDemuxer::~FLVDemuxer() {
 	input_stream = NULL;
 }
 
-int FLVDemuxer::setFLVPayloadEventHandler(FLVTag::TagType tagType, PayloadEventHandler<FLVTag>* handler) {
-	switch(tagType) {
-	case FLVTag::Audio:
-		videoPayloadHandler = (FLVPayloadEventHandler*) handler;
-		break;
-	case FLVTag::Video:
-		audioPayloadHandler = (FLVPayloadEventHandler*) handler;
-		break;
-	case FLVTag::Script:
-		scriptPayloadHandler = (FLVPayloadEventHandler*) handler;
-		break;
+int FLVDemuxer::parse() {
+	FLVTag commonTag;
+	FLVVideoTag videoTag;
+	FLVAudioTag audioTag;
+	FLVDataScriptTag scriptTag;
+	while(commonTag.deserialize(NULL, input_stream) > 0)
+	{
+		switch(commonTag.getType()) {
+		case FLVTag::Audio:
+			if(audioTag.deserialize(&commonTag, input_stream) < 0)
+				return -1;
+			break;
+		case FLVTag::Video:
+			if(videoTag.deserialize(&commonTag, input_stream) < 0)
+				return -1;
+			break;
+		case FLVTag::Script:
+			if(scriptTag.deserialize(&commonTag, input_stream) < 0)
+				return -1;
+			break;
+		}
 	}
-}
-
-void FLVDemuxer::parse() {
-	FLVTag tag;
-	tag.deserialize(NULL, input_stream);
+	return 0;
 }
 
 

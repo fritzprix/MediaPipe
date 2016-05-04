@@ -17,7 +17,7 @@
 
 namespace MediaPipe {
 
-class FLVTag : Serializable<void>, public Unpackable<FLVTag> , public Packable<FLVTag> {
+class FLVTag : Serializable<void>{
 public:
 	FLVTag();
 	virtual ~FLVTag();
@@ -31,9 +31,6 @@ public:
 	ssize_t serialize(void* ctx, uint8_t* into);
 	ssize_t deserialize(void* ctx, const MediaStream* stream);
 	ssize_t deserialize(void* ctx, const uint8_t* from);
-
-	Payload<FLVTag>* getPayload();
-	bool setPayload(const Payload<FLVTag>* payload);
 
 	TagType getType(void) const;
 	void setType(TagType);
@@ -50,9 +47,9 @@ private:
 	TagType  type;				// video / audio / datascript
 };
 
-class FLVVideoTag : public Payload<FLVTag> , public Unpackable<FLVVideoTag>, public Packable<FLVVideoTag> {
+class FLVVideoTag : public Serializable<FLVTag> {
 public:
-	FLVVideoTag(size_t bsz);
+	FLVVideoTag();
 	~FLVVideoTag();
 
 	typedef enum {
@@ -84,16 +81,6 @@ public:
 	ssize_t deserialize(FLVTag* ctx, const MediaStream* stream);
 	ssize_t deserialize(FLVTag* ctx, const uint8_t* from);
 
-	Payload<FLVVideoTag>* getPayload();
-	bool setPayload(const Payload<FLVVideoTag>* payload);
-
-	/*
-	 * in some sense, set payload method overlaps functionality on write method below
-	 * but I can't be sure which will be more elegant for whole design.
-	 */
-	ssize_t writeDataAVC(FLVTag* ctx, uint8_t* data, size_t sz, FrameType, CodecID, AVCPktType, uint32_t dts, uint32_t pts);
-	ssize_t writeData(FLVTag* ctx, uint8_t* data, size_t sz, FrameType, CodecID, uint32_t dts, uint32_t pts);
-	ssize_t writeData(FLVTag* ctx, uint8_t* data, size_t sz,  uint32_t dts, uint32_t pts);
 
 	AVCPktType getAvcType() const;
 	void setAvcType(AVCPktType avcType);
@@ -106,13 +93,12 @@ private:
 	FrameType frame_type;		// FrameType (Key Frame / Interframe and so on...)
 	CodecID codec_id;			// Codec ID  (H.263 / H.264 and so on...)
 	AVCPktType avc_type;		// AVC Chunk Specifier (Sequence header / nalu)
-	uint8_t* obj_buffer;
 	uint32_t cts;				// composition time stamp which eventually (pts - dts) in millisec
 };
 
-class FLVAudioTag :  Payload<FLVTag>, public Unpackable<FLVAudioTag> , public Packable<FLVAudioTag> {
+class FLVAudioTag :  Serializable<FLVTag> {
 public:
-	FLVAudioTag(size_t bsz);
+	FLVAudioTag();
 	~FLVAudioTag();
 
 	typedef enum {
@@ -158,19 +144,6 @@ public:
 	ssize_t deserialize(FLVTag* ctx, const MediaStream* stream);
 	ssize_t deserialize(FLVTag* ctx, const uint8_t* from);
 
-	Payload<FLVAudioTag>* getPayload();
-	bool setPayload(const Payload<FLVAudioTag>* );
-
-	/**
-	 *  write audio data into flv chunk
-	 *  @param ctx MediaContext(FLVTag here) to be updated by the audio raw data
-	 *  @param data audio data buffer to be written
-	 *  @param size size of audio data
-	 *  @param
-	 */
-	ssize_t writeData(FLVTag* ctx, uint8_t* data, size_t sz, SoundFormat fmt, SoundRate rate, SoundSize smp_sz, SoundType snd_type, uint32_t timestamp);
-	ssize_t writeDataAAC(FLVTag* ctx, uint8_t* data, size_t sz, SoundRate, SoundSize, SoundType, AACPktType, uint32_t timestamp);
-	ssize_t writeData(FLVTag* ctx, uint8_t* data, size_t sz, uint32_t timestamp);
 
 	void setSoundFormat(SoundFormat fmt);
 	SoundFormat getSoundFormat(void) const;
@@ -190,10 +163,9 @@ private:
 	SoundType snd_type;
 	SoundSize snd_sz;
 	AACPktType aac_pkt_type;
-	uint8_t* obj_buffer;
 };
 
-class FLVDataScriptTag : Payload<FLVTag>  {
+class FLVDataScriptTag : Serializable<FLVTag>  {
 public:
 	FLVDataScriptTag();
 	~FLVDataScriptTag();
@@ -202,10 +174,6 @@ public:
 	ssize_t serialize(FLVTag* ctx, uint8_t* into);
 	ssize_t deserialize(FLVTag* ctx, const MediaStream* stream);
 	ssize_t deserialize(FLVTag* ctx, const uint8_t* from);
-
-	AMF0* getScriptData(void);
-private:
-	AMF0 amf_script;
 };
 
 }
