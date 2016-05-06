@@ -3,4 +3,6 @@ SRC-$(CONFIG_RTMP)+=./rtmp
 
 OBJ-$(CONFIG_RTMP)+=FLVDemuxer \
 		   FLVTag \
-		   AMF0
+		   AMF0 \
+		   FLVDumper\
+		   FLVTestUnit

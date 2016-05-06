@@ -28,6 +28,8 @@ struct client_session {
 	sockaddr_in addr;
 };
 
+static size_t READOUT_SIZE = 16;
+
 namespace MediaPipe {
 
 MediaServerSocketStream::MediaServerSocketStream(const char* host, int port) {
@@ -66,12 +68,12 @@ int MediaServerSocketStream::open(void) {
 	socklen_t sl = sizeof(sockaddr_in);
 	sockaddr_in client_addr;
 	int res;
-	res = bind(sock_fd, (sockaddr*) &host_addr, sl);
-	assert(!(res < 0));
-	res = listen(sock_fd,0);
-	assert(!(res < 0));
-	client_fd = accept(sock_fd, (sockaddr*) &client_addr,&sl);
-	assert(!(client_fd < 0));
+	if((res = bind(sock_fd, (sockaddr*) &host_addr, sl)) < 0)
+		return res;
+	if((res = listen(sock_fd,0)) < 0)
+		return res;
+	if((client_fd = accept(sock_fd, (sockaddr*) &client_addr,&sl)) < 0)
+		return client_fd;
 	return EXIT_SUCCESS;
 }
 
@@ -93,8 +95,24 @@ ssize_t MediaServerSocketStream::write(const void* wb, size_t sz) {
 }
 
 ssize_t MediaServerSocketStream::write(const uint8_t c) {
-	assert(!(client_fd));
+	assert(!(client_fd < 0));
 	return send(sock_fd, &c, sizeof(uint8_t),0);
+}
+
+ssize_t MediaServerSocketStream::skip(size_t sz) const {
+	assert(!(client_fd < 0) && (sz > 0));
+	uint8_t buffer[READOUT_SIZE];
+	size_t res,rsz = sz;
+	while(rsz > READOUT_SIZE)
+	{
+		if((res = recv(client_fd, buffer, READOUT_SIZE,0)) < 0)
+			return res;
+		rsz -= res;
+	}
+	if((res = recv(client_fd, buffer, rsz, 0)) < 0)
+		return res;
+	rsz -= res;
+	return (sz - rsz);
 }
 
 int MediaServerSocketStream::close() {

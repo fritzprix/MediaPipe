@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <assert.h>
 
+static size_t READOUT_BUFFER_SIZE = 16;
 
 namespace MediaPipe {
 
@@ -83,6 +84,24 @@ ssize_t MediaClientSocketStream::write(const uint8_t c) {
 	assert(!(sock_fd < 0));
 	return send(sock_fd, &c, sizeof(uint8_t),0);
 }
+
+ssize_t MediaClientSocketStream::skip(size_t sz) const
+{
+	assert((sz > 0) && !(sock_fd < 0));
+	uint8_t buffer[READOUT_BUFFER_SIZE];
+	size_t res, rsz = sz;
+	while(rsz > READOUT_BUFFER_SIZE)
+	{
+		if((res = recv(sock_fd, buffer, READOUT_BUFFER_SIZE, 0)) < 0)
+			return res;
+		rsz -= res;
+	}
+	if((res = recv(sock_fd, buffer,rsz, 0)) < 0)
+		return res;
+	rsz -= res;
+	return (sz - rsz);
+}
+
 
 int MediaClientSocketStream::close() {
 	if(sock_fd < 0)

@@ -17,23 +17,47 @@
 
 namespace MediaPipe {
 
-class FLVTag : Serializable<void>{
+class FLVTag {
 public:
-	FLVTag();
-	virtual ~FLVTag();
 	typedef enum {
 		Audio = 8,
 		Video = 9,
 		Script = 18
 	} TagType;
+	FLVTag();
+	virtual ~FLVTag();
+
+	virtual TagType getType(void) const = 0;
+	virtual void setType(TagType) = 0;
+	virtual size_t getSize(void) const = 0;
+	virtual void setSize(size_t) = 0;
+	virtual uint32_t getTimestamp(void) const = 0;
+	virtual void setTimestamp(uint32_t) = 0;
+	virtual uint32_t getStreamID(void) const = 0;
+	virtual void setStreamID(uint32_t) = 0;
+};
+
+class FLVCommonTag : Serializable<void> , public FLVTag {
+public:
+	FLVCommonTag(FLVCommonTag* tag);
+	FLVCommonTag();
+	virtual ~FLVCommonTag();
+
+	FLVCommonTag& operator=(const FLVCommonTag& arg) {
+		type = arg.type;
+		t_stmp = arg.t_stmp;
+		psize = arg.psize;
+		stream_id = arg.stream_id;
+		return *this;
+	}
 
 	ssize_t serialize(void* ctx, MediaStream* stream) ;
 	ssize_t serialize(void* ctx, uint8_t* into);
 	ssize_t deserialize(void* ctx, const MediaStream* stream);
 	ssize_t deserialize(void* ctx, const uint8_t* from);
 
-	TagType getType(void) const;
-	void setType(TagType);
+	FLVTag::TagType getType(void) const;
+	void setType(FLVTag::TagType);
 	size_t getSize(void) const;
 	void setSize(size_t);
 	uint32_t getTimestamp(void) const;
@@ -44,10 +68,10 @@ private:
 	uint32_t t_stmp;			// decoding timestamp
 	uint32_t stream_id;			// always 0
 	uint32_t psize;				// payload(AudioTag + audiopayload or VideoTag + videopayload) size
-	TagType  type;				// video / audio / datascript
+	FLVTag::TagType type;		// video / audio / datascript
 };
 
-class FLVVideoTag : public Serializable<FLVTag> {
+class FLVVideoTag : public Serializable<FLVCommonTag> , public FLVTag{
 public:
 	FLVVideoTag();
 	~FLVVideoTag();
@@ -76,11 +100,19 @@ public:
 		AVC_EOS = 2
 	}AVCPktType;
 
-	ssize_t serialize(FLVTag* ctx, MediaStream* stream) ;
-	ssize_t serialize(FLVTag* ctx, uint8_t* into);
-	ssize_t deserialize(FLVTag* ctx, const MediaStream* stream);
-	ssize_t deserialize(FLVTag* ctx, const uint8_t* from);
+	ssize_t serialize(FLVCommonTag* ctx, MediaStream* stream) ;
+	ssize_t serialize(FLVCommonTag* ctx, uint8_t* into);
+	ssize_t deserialize(FLVCommonTag* ctx, const MediaStream* stream);
+	ssize_t deserialize(FLVCommonTag* ctx, const uint8_t* from);
 
+	FLVTag::TagType getType(void) const;
+	void setType(FLVTag::TagType);
+	size_t getSize(void) const;
+	void setSize(size_t);
+	uint32_t getTimestamp(void) const;
+	void setTimestamp(uint32_t);
+	uint32_t getStreamID(void) const;
+	void setStreamID(uint32_t);
 
 	AVCPktType getAvcType() const;
 	void setAvcType(AVCPktType avcType);
@@ -94,9 +126,10 @@ private:
 	CodecID codec_id;			// Codec ID  (H.263 / H.264 and so on...)
 	AVCPktType avc_type;		// AVC Chunk Specifier (Sequence header / nalu)
 	uint32_t cts;				// composition time stamp which eventually (pts - dts) in millisec
+	FLVCommonTag commonTag;
 };
 
-class FLVAudioTag :  Serializable<FLVTag> {
+class FLVAudioTag :  Serializable<FLVCommonTag> , public FLVTag {
 public:
 	FLVAudioTag();
 	~FLVAudioTag();
@@ -139,11 +172,19 @@ public:
 		AAC_RAW = 1,
 	}AACPktType;
 
-	ssize_t serialize(FLVTag* ctx, MediaStream* stream) ;
-	ssize_t serialize(FLVTag* ctx, uint8_t* into);
-	ssize_t deserialize(FLVTag* ctx, const MediaStream* stream);
-	ssize_t deserialize(FLVTag* ctx, const uint8_t* from);
+	ssize_t serialize(FLVCommonTag* ctx, MediaStream* stream) ;
+	ssize_t serialize(FLVCommonTag* ctx, uint8_t* into);
+	ssize_t deserialize(FLVCommonTag* ctx, const MediaStream* stream);
+	ssize_t deserialize(FLVCommonTag* ctx, const uint8_t* from);
 
+	FLVTag::TagType getType(void) const;
+	void setType(FLVTag::TagType);
+	size_t getSize(void) const;
+	void setSize(size_t);
+	uint32_t getTimestamp(void) const;
+	void setTimestamp(uint32_t);
+	uint32_t getStreamID(void) const;
+	void setStreamID(uint32_t);
 
 	void setSoundFormat(SoundFormat fmt);
 	SoundFormat getSoundFormat(void) const;
@@ -163,17 +204,29 @@ private:
 	SoundType snd_type;
 	SoundSize snd_sz;
 	AACPktType aac_pkt_type;
+	FLVCommonTag commonTag;
 };
 
-class FLVDataScriptTag : Serializable<FLVTag>  {
+class FLVDataScriptTag : Serializable<FLVCommonTag> , public FLVTag {
 public:
 	FLVDataScriptTag();
 	~FLVDataScriptTag();
 
-	ssize_t serialize(FLVTag* ctx, MediaStream* stream) ;
-	ssize_t serialize(FLVTag* ctx, uint8_t* into);
-	ssize_t deserialize(FLVTag* ctx, const MediaStream* stream);
-	ssize_t deserialize(FLVTag* ctx, const uint8_t* from);
+	ssize_t serialize(FLVCommonTag* ctx, MediaStream* stream) ;
+	ssize_t serialize(FLVCommonTag* ctx, uint8_t* into);
+	ssize_t deserialize(FLVCommonTag* ctx, const MediaStream* stream);
+	ssize_t deserialize(FLVCommonTag* ctx, const uint8_t* from);
+
+	FLVTag::TagType getType(void) const;
+	void setType(FLVTag::TagType);
+	size_t getSize(void) const;
+	void setSize(size_t);
+	uint32_t getTimestamp(void) const;
+	void setTimestamp(uint32_t);
+	uint32_t getStreamID(void) const;
+	void setStreamID(uint32_t);
+private:
+	FLVCommonTag commonTag;
 };
 
 }

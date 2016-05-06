@@ -11,14 +11,12 @@
 #include "cdsl_hashtree.h"
 #include "Iterator.h"
 #include "AMF0.h"
-#include "FLVTag.h"
-
-
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
 #include <assert.h>
+#include <FLVTag.h>
 #include <iostream>
 #include <functional>
 #include <string>
@@ -220,7 +218,7 @@ ssize_t AMF0::deserialize(void* ctx, const uint8_t* from)
 	if(!from)
 		return -1;
 
-	FLVTag* flv_t = (FLVTag*) ctx;
+	FLVCommonTag* flv_t = (FLVCommonTag*) ctx;
 	AMF0Base *val = NULL;
 	size_t t_sz = flv_t->getSize();
 	size_t sz = 0;
@@ -239,7 +237,7 @@ ssize_t AMF0::deserialize(void* ctx, const MediaStream* stream)
 	if(!stream)
 		return -1;
 	AMF0Base* val = NULL;
-	FLVTag* flv_t = (FLVTag*) ctx;
+	FLVCommonTag* flv_t = (FLVCommonTag*) ctx;
 	size_t t_sz = flv_t->getSize();
 	size_t sz = 0;
 	while(sz <= t_sz)

@@ -6,6 +6,7 @@
  */
 
 #include "core/MediaStream.h"
+#include "core/Demuxer.h"
 #include "FLVTag.h"
 
 #ifndef FLVDEMUXER_H_
@@ -14,13 +15,17 @@
 namespace MediaPipe {
 
 
-class FLVDemuxer {
+class FLVDemuxer : public Demuxer<FLVTag>{
 public:
 	FLVDemuxer(MediaStream* input_stream);
 	virtual ~FLVDemuxer();
-	int parse();
+	void setChunkHandler(DemuxerChunkHandler<FLVTag>* handler, ChunkType type);
+	bool demux();
 private:
 	const MediaStream* input_stream;
+	DemuxerChunkHandler<FLVTag>* vhandler;
+	DemuxerChunkHandler<FLVTag>* ahandler;
+	DemuxerChunkHandler<FLVTag>* mhandler;
 };
 
 } /* namespace MediaPipe */

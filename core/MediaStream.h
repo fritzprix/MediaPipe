@@ -29,6 +29,7 @@ public:
 	virtual uint8_t read() const = 0;
 	virtual ssize_t write(const void* wb, size_t sz) = 0;
 	virtual ssize_t write(const uint8_t ) = 0;
+	virtual ssize_t skip(size_t sz) const = 0;
 	virtual int close() = 0;
 };
 
